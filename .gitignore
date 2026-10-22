@@ -1,0 +1,29 @@
+# LaTeX build output directory
+build/
+
+# LaTeX auxiliary/build files (in case they land outside build/)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.run.xml
+*.nav
+*.snm
+*.vrb
+*.xdv
+
+# Build output
+*.pdf
+
+# macOS
+.DS_Store
+
+.vscode

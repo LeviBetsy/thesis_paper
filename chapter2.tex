@@ -1,0 +1,27 @@
+\chapter{Literature Review}
+\section{Robot Perception}
+\section{Robot Localization}
+\section{Monocular Depth Estimation}
+Early approaches to MDE relied on hand-crafted geometric cues and probabilistic graphical models,
+such as Markov random fields, to infer depth from superpixel features
+\todo{cite classical MDE work, e.g. Saxena et al.}. The advent of deep learning shifted the field
+toward end-to-end CNN regression, where an encoder-decoder network is trained to directly
+predict a dense depth map from an RGB input, supervised by ground-truth depth from LiDAR
+or stereo datasets \todo{cite Eigen et al. and follow-up encoder-decoder work}. More recently,
+vision transformer (ViT) backbones have been shown to outperform convolutional architectures
+on this task, since the global self-attention mechanism of a transformer captures long-range
+spatial context that is useful for resolving scale ambiguity, whereas CNNs are inherently
+biased toward local receptive fields \todo{cite DPT / MiDaS or similar ViT-based depth work}.
+
+A second axis along which this literature divides is whether a model is trained to generalize
+across scenes at all. Models fine-tuned on a single dataset with fixed camera intrinsics, such
+as NYU Depth v2 or KITTI, can be trained to regress depth in meters, but transfer poorly beyond
+the domain they were fitted to. Zero-shot models instead train on a mixture of heterogeneous
+sources and trade metric output for breadth of generalization
+\todo{cite MiDaS, Depth Anything}. Chapter~\ref{ch:mde} takes up the consequences of that
+trade-off for the Cyclops rover.
+
+%%% Local Variables: ***
+%%% mode: latex ***
+%%% TeX-master: "thesis.tex" ***
+%%% End: ***

@@ -1,0 +1,280 @@
+\chapter{Monocular Depth Estimation}
+\label{ch:mde}
+\section{Introduction to Monocular Depth Estimation}
+Depth estimation is the task of recovering, for every pixel in an image,
+the distance between the camera and the corresponding point in the physical scene.
+Traditionally, this information has been obtained through active sensing hardware,
+such as LiDAR, ultrasonic rangefinders, or time-of-flight cameras, or through passive stereo vision,
+where two calibrated cameras triangulate depth from the disparity between matched pixels.
+
+
+Monocular depth estimation (MDE), in contrast, seeks to recover this same per-pixel depth map
+from a single RGB image and no additional hardware. In this sense, the goal of MDE is most similar
+to that of an RGB-D camera, which uses an infrared projector to cast a structured grid of laser dots
+onto the scene and infers per-pixel depth from how that pattern is distorted by scene geometry; MDE
+aims to recover the same dense, per-pixel depth map, but passively, from RGB pixels alone and without
+any active illumination. Because a single 2D projection is inherently
+a many-to-one mapping of the 3D world, this problem is fundamentally ill-posed: an image of a small
+object placed close to the camera is, without additional context, indistinguishable from an image
+of a larger object placed further away. Resolving this ambiguity requires the model to exploit
+monocular depth cues, e.g., relative object size, texture gradients, occlusion boundaries,
+and learned priors about typical scene geometry, rather than direct geometric triangulation [\todo{cite?}].
+
+Early work on monocular depth estimation used MRFbased formulations [3], simple geometric assumptions [2], or non-parametric methods [14] [midas paper]
+
+
+Monocular depth estimation is particularly attractive for embedded and resource-constrained
+robotic platforms, such as the cyclops rover, because it removes the need for a
+dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
+and power draw that are difficult to justify on a small, battery-powered platform.
+A single front-mounted camera can instead serve double duty: providing both the RGB imagery
+used for scene understanding and, via MDE, an estimate of obstacle distance that would
+otherwise require a separate range-finding sensor. Section~\ref{sec:mde-to-range} discusses
+how this dense depth output is converted into the sparse range measurements consumed by the
+localization pipeline described in Chapter~\ref{ch:localization}.
+
+\subsection{Problem Formulation and Notation}
+\label{sec:mde-formulation}
+Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$,
+and let $Z \in \mathbb{R}_{+}^{H \times W}$ denote the corresponding metric depth map, whose
+entry $z(u,v)$ is the distance in meters from the camera's optical center to the scene point
+imaged at pixel $(u,v)$. Monocular depth estimation seeks a function
+\begin{equation}
+  f_\theta : \mathbb{R}^{H \times W \times 3} \rightarrow \mathbb{R}^{H \times W},
+  \qquad \hat{D} = f_\theta(I),
+  \label{eq:mde-map}
+\end{equation}
+parameterized by learned weights $\theta$, that approximates $Z$ from $I$ alone. Throughout this
+thesis $z$ denotes a true metric depth and $\hat{d}$ a raw network prediction; as
+Section~\ref{sec:relative-depth} explains, these are not the same quantity and are not even
+expressed in the same units.
+
+The camera is modeled as an ideal pinhole with intrinsic matrix
+\begin{equation}
+  K = \begin{bmatrix}
+        f_x & 0   & c_x \\
+        0   & f_y & c_y \\
+        0   & 0   & 1
+      \end{bmatrix},
+  \label{eq:intrinsics}
+\end{equation}
+where $f_x, f_y$ are the focal lengths in pixels and $(c_x, c_y)$ is the principal point. A scene
+point $(X, Y, Z)$ expressed in the camera frame projects to
+\begin{equation}
+  u = f_x \frac{X}{z} + c_x,
+  \qquad
+  v = f_y \frac{Y}{z} + c_y,
+  \label{eq:projection}
+\end{equation}
+and, given a depth $z$ at pixel $(u,v)$, the corresponding scene point is recovered by
+back-projection:
+\begin{equation}
+  X = \frac{(u - c_x)\, z}{f_x},
+  \qquad
+  Y = \frac{(v - c_y)\, z}{f_y},
+  \qquad
+  Z = z .
+  \label{eq:backprojection}
+\end{equation}
+Equation~\eqref{eq:backprojection} is the mechanism by which Section~\ref{sec:mde-to-range}
+converts a depth map into the geometry of a range scan.
+
+Equation~\eqref{eq:projection} also makes the ill-posedness described above precise. Consider
+scaling the entire scene about the optical center by a factor $s > 0$, so that every scene point
+$(X, Y, Z)$ is mapped to $(sX, sY, sZ)$. The projected coordinates become
+\begin{equation}
+  u' = f_x \frac{sX}{sz} + c_x = u,
+  \qquad
+  v' = f_y \frac{sY}{sz} + c_y = v,
+  \label{eq:scale-ambiguity}
+\end{equation}
+which are unchanged, while every depth has been multiplied by $s$. The image is therefore
+\emph{invariant} to a uniform rescaling of the scene, even though the depth map is not. No
+function of $I$ alone, however expressive, can distinguish these cases; absolute scale is not
+merely difficult to estimate from a single image, it is not present in the image at all.
+
+\subsection{Relative versus Metric Depth}
+\label{sec:relative-depth}
+A consequence of Equation~\eqref{eq:scale-ambiguity} that is easy to overlook is that most
+off-the-shelf MDE models do not, in fact, output meters. They output \emph{relative} depth: a
+dense map that is unitless, typically normalized to $[0,1]$ over the image, and correct in
+\emph{ordering} rather than in \emph{measurement}. A predicted value of $0.8$ asserts that the
+pixel is nearer than one predicted at $0.4$; it does not assert that the pixel is $80$
+centimeters away, and rescaling the whole prediction by any positive constant would be an equally
+valid answer. For a robot, this is the wrong half of the problem to have solved: knowing which
+obstacle is nearest is of little use to a motion planner that must decide whether there is enough
+clearance to pass between two of them.
+
+The first reason for this is geometric, and it is not a deficiency that better training could
+remove. Figure~\ref{fig:scale-ambiguity} illustrates the argument of
+Equation~\eqref{eq:scale-ambiguity} directly: an object of size $s$ at distance $z$ and an object
+of size $2s$ at distance $2z$ subtend the same visual angle, fill the same cone of rays, and
+therefore produce pixel-for-pixel identical images. Any model that maps images to depths must
+assign both cases the same output, so at most one of the two answers can be correct in meters.
+Recovering absolute scale requires information from outside the image, such as a known object
+size, a known camera mounting height, or a second calibrated view.
+
+The second reason is a consequence of how modern zero-shot models are trained. To generalize
+across scenes rather than to a single dataset, models such as MiDaS, DPT, and Depth Anything are
+trained on a mixture of heterogeneous sources: LiDAR-supervised driving data, RGB-D indoor
+captures, stereo photographs scraped from the web, structure-from-motion reconstructions, and
+frames extracted from 3D films \todo{cite MiDaS (Ranftl et al.), DPT, Depth Anything}. These
+sources disagree about camera intrinsics, and several of them supply depth only up to an unknown
+scale, or as raw stereo disparity with an unknown baseline, so depths drawn from different
+datasets cannot be placed on a common axis at all. The standard remedy, introduced with MiDaS, is
+a \emph{scale-and-shift-invariant} loss computed on inverse depth: before the error is measured,
+the prediction is aligned to the ground truth by the scale and shift that best fit the two, and
+only the residual is penalized. The practical effect is that the training signal never asks the
+network to produce meters, because any prediction differing from the truth by an affine transform
+of inverse depth is already scored as perfect. Working in inverse depth carries the additional
+benefit of keeping sky and far-field pixels bounded, since $1/z \rightarrow 0$ rather than
+diverging as $z$ grows.
+
+What such a model does provide is an estimate related to true depth by an unknown affine
+transform in the inverse-depth domain,
+\begin{equation}
+  \frac{1}{z(u,v)} \;\approx\; a\,\hat{d}(u,v) + b,
+  \label{eq:affine-invariance}
+\end{equation}
+where the scale $a$ and shift $b$ are unknown and in general vary from image to image.
+Equation~\eqref{eq:affine-invariance} is the useful statement of the limitation: the prediction is
+not wrong, merely uncalibrated, and two correspondences of known metric depth suffice to determine
+$a$ and $b$ and thereby convert the entire map to meters. Estimating them is the subject of
+Section~\ref{sec:mde-to-range}.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/scale-ambiguity}
+  \caption[Scale ambiguity in monocular depth estimation]{Scale ambiguity in monocular depth
+    estimation. An object of size $s$ at distance $z$ and an object of size $2s$ at distance $2z$
+    subtend the same visual angle and fill the same cone of rays, so both produce the identical
+    image $I$. Since a uniform rescaling of the scene leaves the projection of
+    Equation~\eqref{eq:projection} unchanged while multiplying every depth by the same factor,
+    absolute scale is not recoverable from a single image. Standard monocular models therefore
+    predict depth only up to an unknown scale and shift.}
+  \label{fig:scale-ambiguity}
+\end{figure}
+
+\subsection{Evaluating Depth Predictions}
+\label{sec:mde-metrics}
+Depth predictions are conventionally scored against ground truth over the set of $N$ pixels for
+which a valid ground-truth depth exists. Writing $\hat{z}$ for a predicted metric depth and $z$
+for the corresponding ground truth, the metrics reported in Chapter~\ref{ch:results} are the
+absolute relative error,
+\begin{equation}
+  \mathrm{AbsRel} = \frac{1}{N} \sum_{i=1}^{N} \frac{\lvert \hat{z}_i - z_i \rvert}{z_i},
+  \label{eq:absrel}
+\end{equation}
+the root mean squared error in meters,
+\begin{equation}
+  \mathrm{RMSE} = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (\hat{z}_i - z_i)^2},
+  \label{eq:rmse}
+\end{equation}
+and the threshold accuracies $\delta_\tau$, defined as the fraction of pixels whose prediction
+falls within a multiplicative tolerance of the truth,
+\begin{equation}
+  \delta_\tau = \frac{1}{N} \left\lvert \left\{ i : \max\!\left( \frac{\hat{z}_i}{z_i},
+    \frac{z_i}{\hat{z}_i} \right) < \tau \right\} \right\rvert,
+  \qquad \tau \in \{1.25,\ 1.25^2,\ 1.25^3\}.
+  \label{eq:delta}
+\end{equation}
+AbsRel weights each error by its distance and so is dominated by the near field, whereas RMSE is
+dominated by the far field; reporting both, together with $\delta_\tau$, gives a fuller picture
+than any one of them alone.
+
+Equations~\eqref{eq:absrel}--\eqref{eq:delta} all presume that $\hat{z}$ is expressed in meters,
+and so cannot be applied to a relative-depth model as it stands. The standard practice is to align
+each prediction to the ground truth before scoring it. For a scale-invariant model this means
+median scaling,
+\begin{equation}
+  \hat{z} \leftarrow \hat{z} \cdot \frac{\mathrm{median}(z)}{\mathrm{median}(\hat{z})},
+  \label{eq:median-scaling}
+\end{equation}
+while for an affine-invariant model the scale and shift of
+Equation~\eqref{eq:affine-invariance} are fitted per image by least squares in the inverse-depth
+domain. This alignment must be stated whenever such numbers are reported, because it grants the
+model the very information, absolute scale, that the deployed system will have to obtain for
+itself; a favorable AbsRel computed after median scaling says nothing about whether the rover can
+measure a doorway.
+
+For that reason, Chapter~\ref{ch:results} reports these full-frame metrics chiefly to situate the
+model against the published literature, and treats them as secondary. The quantity that governs
+whether localization succeeds is the error in the handful of range values that
+Section~\ref{sec:mde-to-range} extracts from the depth map, measured after the scale recovery the
+rover actually performs at run time.
+
+\section{Vision Transformer Architecture in Monocular Depth Estimation}
+\label{sec:vit-mde}
+
+\subsection{From Convolutions to Global Attention}
+A few popular architecture for MDE models are Vision Transformer-based model and CNN-based model. While both
+
+The problem, why CNN don't work because of its inductive bias: locality. Where you sort of need to see everything. Comes: Vision Transformer. Vision Transformer was developed following the architecture of NLP models for transformer. The ViT quickly became the standard
+\todo{Sharpen the locality argument with a concrete example: the apparent size of a doorway is
+only interpretable relative to the room around it, so the cue that disambiguates scale may lie
+far from the pixel being predicted, whereas a CNN must stack many layers before two distant
+regions can interact. Ties back to the ``learned priors about typical scene geometry'' claim in
+Section~\ref{sec:mde-formulation}.}
+
+\subsection{Patch Embedding and Positional Encoding}
+\todo{An image of size $H \times W$ is split into $N = HW/p^2$ non-overlapping patches of side
+$p$, each flattened and linearly projected to a $D$-dimensional token; learned positional
+encodings restore spatial order; the readout/class token and what DPT does with it.}
+
+\subsection{Multi-Head Self-Attention}
+\todo{Queries, keys and values; $\mathrm{softmax}(QK^\top/\sqrt{d_k})V$; multiple heads attending
+to different relations. State the $O(N^2)$ cost in token count explicitly here, since it is what
+ties input resolution to inference latency in Chapter~\ref{ch:embedded}.}
+
+\subsection{Dense Prediction Transformer Decoder}
+\todo{The piece that turns a classification backbone into a dense regressor: Reassemble
+operations convert token sequences from several transformer stages back into spatial feature maps
+at differing resolutions; Fusion blocks progressively upsample and merge them in a RefineNet-like
+manner; a final head emits the dense inverse-depth map. Cite Ranftl et al., DPT.}
+
+\subsection{The Model Deployed on the Cyclops Rover}
+\todo{Name the specific checkpoint, input resolution, parameter count and quantization used on
+the rover, and justify it against the embedded compute budget; forward-reference
+Chapter~\ref{ch:embedded}.}
+
+\section{Monocular Depth to Range Finder}
+\label{sec:mde-to-range}
+
+Relative depth is not sufficient for robot perception which requires exact metric distance to navigate. Some models do actually give that, DAV2 metric, though they are not at all accurate for high-precision robotics task. \todo{cite} et al, did this but not accurate. \todo{cite} et al did that but changes.
+
+\subsection{Recovering Metric Scale}
+\todo{Commit to one of: (i) known camera mounting height plus a flat-ground assumption, which
+turns floor pixels into a metric constraint sufficient to solve for $a$ and $b$ in
+Equation~\eqref{eq:affine-invariance}; (ii) a one-time calibration against a target at a known
+distance; (iii) a metric model such as Depth Anything V2 metric, exploiting the fact that the
+rover carries one fixed camera at one fixed mounting height, so the domain mismatch that
+normally limits metric models does not apply. Then quantify the accuracy objection raised above
+and give the failure modes of whichever method is chosen.}
+
+\subsection{Back-Projection to 3D}
+\todo{Apply Equation~\eqref{eq:backprojection} with the calibrated metric depth to lift each pixel
+to a point $(X, Y, Z)$ in the camera frame, then transform into the rover body frame using the
+fixed camera extrinsics.}
+
+\subsection{Ground-Plane and Sky Rejection}
+\todo{Floor pixels are close to the camera but are not obstacles; without rejecting them every
+scan would report an imminent collision. Fit or assume a ground plane in the body frame and
+discard points within a tolerance of it, along with points above the rover's height.}
+
+\subsection{Reduction to a 1D Angular Range Scan}
+\todo{The step that makes a camera behave like a range finder. The bearing of image column $u$ is
+$\theta(u) = \arctan\!\big((u - c_x)/f_x\big)$; partition the horizontal field of view into $K$
+angular bins matching the beam layout the measurement model of Chapter~\ref{ch:localization}
+expects, and take the minimum surviving obstacle range within each bin. Define the maximum usable
+range and the encoding of invalid or no-return beams.}
+
+\subsection{Noise Characterization}
+\todo{Characterize the error distribution of the resulting ranges as a function of true distance
+and bearing, including the heavy tail produced by depth-boundary bleed at object silhouettes.
+This distribution is the input to the beam model $p(z_t \mid x_t, m)$ in
+Chapter~\ref{ch:localization}.}
+
+%%% Local Variables: ***
+%%% mode: latex ***
+%%% TeX-master: "thesis.tex" ***
+%%% End: ***

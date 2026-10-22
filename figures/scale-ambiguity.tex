@@ -1,0 +1,61 @@
+% Scale ambiguity in monocular depth estimation.
+%
+% An object of size s at distance z and an object of size 2s at distance 2z
+% subtend exactly the same visual angle, and therefore produce exactly the
+% same image. Used in section 3.1.2 to motivate relative depth output.
+%
+% Pure vector TikZ -- solid fills and plain paths only. Do NOT introduce
+% opacity, shadings or fadings here: the Makefile builds via
+% latex -> dvips -> dvipdf, where those features are unreliable.
+%
+% Geometry: the object-subtending rays have slope 0.18 and the field-of-view
+% rays slope 0.35. The near box's front face sits at x = 3.2 (half-height
+% 0.576) and the far box's at x = 6.4 (half-height 1.152) -- exactly twice
+% the size at exactly twice the distance.
+\begin{tikzpicture}[>=Latex, line join=round, font=\small]
+
+  % ---- camera ---------------------------------------------------------
+  \fill[black!70] (-0.45,-0.30) rectangle (0,0.30);
+  \fill[black!70] (0,0) -- (0.35,0.45) -- (0.35,-0.45) -- cycle;
+  \node[anchor=north] at (0,-0.55) {camera};
+
+  % ---- field of view --------------------------------------------------
+  \draw[black!45,dashed] (0,0) -- (7.6,2.66);
+  \draw[black!45,dashed] (0,0) -- (7.6,-2.66);
+  \node[black!55,anchor=south east] at (7.6,2.66) {field of view};
+
+  % ---- rays subtending both objects -----------------------------------
+  \draw[black!75] (0,0) -- (7.5,1.35);
+  \draw[black!75] (0,0) -- (7.5,-1.35);
+
+  % ---- hypothesis A: small object, near -------------------------------
+  \fill[black!15]  (3.2,-0.576) rectangle (3.6,0.576);
+  \draw[black!75]  (3.2,-0.576) rectangle (3.6,0.576);
+  \node[anchor=south] at (3.4,0.70) {size $s$ at $z$};
+
+  % ---- hypothesis B: twice the size, twice as far ----------------------
+  \fill[black!28]  (6.4,-1.152) rectangle (7.2,1.152);
+  \draw[black!75]  (6.4,-1.152) rectangle (7.2,1.152);
+  \node[anchor=south] at (6.8,1.28) {size $2s$ at $2z$};
+
+  \node[anchor=center] at (5.0,0) {\emph{or}};
+
+  % ---- distance measures ----------------------------------------------
+  \draw[black!35,dotted] (0,-0.55)   -- (0,-3.95);
+  \draw[black!35,dotted] (3.2,-0.62) -- (3.2,-2.35);
+  \draw[black!35,dotted] (6.4,-1.20) -- (6.4,-3.05);
+  \draw[|<->|,black!65] (0,-2.25) -- (3.2,-2.25)
+        node[midway,fill=white,inner sep=1.5pt] {$z$};
+  \draw[|<->|,black!65] (0,-2.95) -- (6.4,-2.95)
+        node[midway,fill=white,inner sep=1.5pt] {$2z$};
+
+  % ---- the image -------------------------------------------------------
+  \draw[->,black!60,line width=0.9pt] (8.15,0) -- (8.95,0);
+
+  \draw[black!75,fill=black!3] (9.2,-1.6) rectangle (12.2,1.6);
+  \fill[black!22] (10.1,-0.82) rectangle (11.3,0.82);
+  \draw[black!75] (10.1,-0.82) rectangle (11.3,0.82);
+  \node[anchor=north,align=center] at (10.7,-1.75)
+        {the image $I$ produced\\by \emph{either} object};
+
+\end{tikzpicture}
