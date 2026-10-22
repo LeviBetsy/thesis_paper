@@ -6,29 +6,30 @@ the distance between the camera and the corresponding point in the physical scen
 Traditionally, this information has been obtained through active sensing hardware,
 such as LiDAR, ultrasonic rangefinders, or time-of-flight cameras, or through stereo vision,
 where two calibrated cameras triangulate depth from the disparity between matched pixels. 
-Depth estimation is a crucial component in many robots' navigation and [change wording] actuation because it allows them to 
-perceive their environment and  
+Depth estimation is a crucial component in many robots' navigation or mapping or \red{manipulation} 
+because it allows them to perceive their environment. 
 
 
-Monocular depth estimation (MDE), in contrast, seeks to recover this same per-pixel depth map
+Monocular depth estimation (MDE), seeks to recover a depth map
 from a single RGB image and no additional hardware. In this sense, the goal of MDE is most similar
 to that of an RGB-D camera, which uses an infrared projector to cast a structured grid of laser dots
-onto the scene and infers per-pixel depth from how that pattern is distorted by scene geometry; MDE
-aims to recover the same dense, per-pixel depth map, but passively, from RGB pixels alone and without
-any active illumination. Because a single 2D projection is inherently
-a many-to-one mapping of the 3D world, this problem is fundamentally ill-posed: an image of a small
+onto the scene and infers per-pixel depth \red{from how that pattern is distorted by scene geometry} \red{[]}; MDE
+aims to recover the same dense, per-pixel depth map from RGB pixels alone and without
+any active infrared projection. 
+
+The MDE problem is fundamentally ill-posed: an image of a small
 object placed close to the camera is, without additional context, indistinguishable from an image
 of a larger object placed further away. Resolving this ambiguity requires the model to exploit
 monocular depth cues, e.g., relative object size, texture gradients, occlusion boundaries,
-and learned priors about typical scene geometry, rather than direct geometric triangulation [\todo{cite?}].
-
-Early work on monocular depth estimation used MRFbased formulations [3], simple geometric assumptions [2], or non-parametric methods [14] [midas paper]
-
+and learned priors about typical scene geometry, rather than direct geometric triangulation \red{[]}.
+Our work leverages transformer-based machine learning models, which leverages a vision transformer ability
+to be trained on MDE, resulting in a reliable model that can extract features of an image and predict
+the depth of objects in the scene. 
 
 Monocular depth estimation is particularly attractive for embedded and resource-constrained
 robotic platforms, such as the cyclops rover, because it removes the need for a
 dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
-and power draw that are difficult to justify on a small, battery-powered platform.
+and power draw that are difficult to justify on a small, battery-powered platform \red{[]}.
 A single front-mounted camera can instead serve double duty: providing both the RGB imagery
 used for scene understanding and, via MDE, an estimate of obstacle distance that would
 otherwise require a separate range-finding sensor. Section~\ref{sec:mde-to-range} discusses
@@ -97,13 +98,16 @@ merely difficult to estimate from a single image, it is not present in the image
 
 \subsection{Relative versus Metric Depth}
 \label{sec:relative-depth}
-A consequence of Equation~\eqref{eq:scale-ambiguity} that is easy to overlook is that most
-off-the-shelf MDE models do not, in fact, output meters. They output \emph{relative} depth: a
+Most off-the-shelf MDE models do not output meters. They output \emph{relative} depth: a
 dense map that is unitless, typically normalized to $[0,1]$ over the image, and correct in
-\emph{ordering} rather than in \emph{measurement}. A predicted value of $0.8$ asserts that the
-pixel is nearer than one predicted at $0.4$; it does not assert that the pixel is $80$
-centimeters away, and rescaling the whole prediction by any positive constant would be an equally
-valid answer. For a robot, this is the wrong half of the problem to have solved: knowing which
+\emph{ordering} rather than in \emph{measurement}. Relative depth depicts how far away a pixel
+in the camera feed is, relative to all other pixel in the image, while \emph{metric} depth depicts
+how far \red{numerically} a pixel is. Moreover, relative depth similar to disparity 
+in stereo vision has an inverse relationship to metric depth.
+
+For example, a predicted relative depth value of $0.5$ asserts that the
+pixel is nearer than one predicted at $0.1$; in the real scene, the pixel could be $5$ cm away or $80$ cm away. 
+For a robot, this relative depth must be converted to be of use: knowing which
 obstacle is nearest is of little use to a motion planner that must decide whether there is enough
 clearance to pass between two of them.
 
@@ -132,6 +136,8 @@ of inverse depth is already scored as perfect. Working in inverse depth carries 
 benefit of keeping sky and far-field pixels bounded, since $1/z \rightarrow 0$ rather than
 diverging as $z$ grows.
 
+They found this a scale and b shift from Least squared something \red[Midas]
+
 What such a model does provide is an estimate related to true depth by an unknown affine
 transform in the inverse-depth domain,
 \begin{equation}
@@ -156,6 +162,10 @@ Section~\ref{sec:mde-to-range}.
     predict depth only up to an unknown scale and shift.}
   \label{fig:scale-ambiguity}
 \end{figure}
+
+We acknowledge that there are several models that predict metric depth because
+they were trained on it \red{[]}, however we found that
+they were not accurate without fine-tuning especially for our robot camera mounting. 
 
 \subsection{Evaluating Depth Predictions}
 \label{sec:mde-metrics}
@@ -245,6 +255,7 @@ Chapter~\ref{ch:embedded}.}
 Relative depth is not sufficient for robot perception which requires exact metric distance to navigate. Some models do actually give that, DAV2 metric, though they are not at all accurate for high-precision robotics task. \todo{cite} et al, did this but not accurate. \todo{cite} et al did that but changes.
 
 \subsection{Recovering Metric Scale}
+methods: we also tested the actual metric model
 \todo{Commit to one of: (i) known camera mounting height plus a flat-ground assumption, which
 turns floor pixels into a metric constraint sufficient to solve for $a$ and $b$ in
 Equation~\eqref{eq:affine-invariance}; (ii) a one-time calibration against a target at a known

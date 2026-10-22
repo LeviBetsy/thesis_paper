@@ -36,6 +36,9 @@
 \usepackage{multirow}
 \usepackage{tabularx}
 \usepackage{parskip} %% <-- added
+\usepackage[normalem]{ulem}  % \uline: underline that wraps across lines; normalem keeps \emph italic
+\newcommand{\ul}[1]{\uline{#1}}  % shorthand for underlining
+\newcommand{\red}[1]{\textcolor{red}{#1}}  % red text (xcolor is loaded by todonotes)
 
 % Uncomment the following to attempt to enforce Type 1 or TrueType 
 % fonts. ProQuest does not want the type 3 fonts used by default as
