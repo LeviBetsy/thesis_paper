@@ -4,8 +4,10 @@
 Depth estimation is the task of recovering, for every pixel in an image,
 the distance between the camera and the corresponding point in the physical scene.
 Traditionally, this information has been obtained through active sensing hardware,
-such as LiDAR, ultrasonic rangefinders, or time-of-flight cameras, or through passive stereo vision,
-where two calibrated cameras triangulate depth from the disparity between matched pixels.
+such as LiDAR, ultrasonic rangefinders, or time-of-flight cameras, or through stereo vision,
+where two calibrated cameras triangulate depth from the disparity between matched pixels. 
+Depth estimation is a crucial component in many robots' navigation and [change wording] actuation because it allows them to 
+perceive their environment and  
 
 
 Monocular depth estimation (MDE), in contrast, seeks to recover this same per-pixel depth map
