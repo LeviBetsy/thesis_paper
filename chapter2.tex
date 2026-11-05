@@ -1,8 +1,9 @@
 \chapter{Literature Review}
 \section{Robot Perception}
 \section{Robot Localization}
-\section{Monocular Depth Estimation}
+\section{Depth Estimation}
 
+Lidar, stereo extc however limited range and expense \red{midas paper}
 Early work on monocular depth estimation used MRFbased formulations [3], simple geometric assumptions [2], or non-parametric methods [14] [midas paper]
 
 Early approaches to MDE relied on hand-crafted geometric cues and probabilistic graphical models,
@@ -19,7 +20,8 @@ biased toward local receptive fields \todo{cite DPT / MiDaS or similar ViT-based
 A second axis along which this literature divides is whether a model is trained to generalize
 across scenes at all. Models fine-tuned on a single dataset with fixed camera intrinsics, such
 as NYU Depth v2 or KITTI, can be trained to regress depth in meters, but transfer poorly beyond
-the domain they were fitted to. Zero-shot models instead train on a mixture of heterogeneous
+the domain they were fitted to. zero shot cross dataset transformer
+ Zero-shot models instead train on a mixture of heterogeneous
 sources and trade metric output for breadth of generalization
 \todo{cite MiDaS, Depth Anything}. Chapter~\ref{ch:mde} takes up the consequences of that
 trade-off for the Cyclops rover.
