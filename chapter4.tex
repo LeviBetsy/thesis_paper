@@ -29,6 +29,10 @@ robotic platforms, such as the cyclops rover, because it removes the need for a
 dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
 and power draw.
 
+The use of a camera for depth perception make the constraint
+to the robot's environment: That it operate
+in a well lit area
+
 \subsection{Problem Formulation and Notation}
 \label{sec:mde-formulation}
 Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$,
@@ -36,7 +40,7 @@ and let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth ma
 is the distance (in meters) along the camera's primary axis of the scene point captured by the image
 at pixel $(u,v)$. Figure~\ref{fig:depth-definition} is a visual representation of this definition.
 In the visualization, all points on the wall that is displayed in the captured image would have the
-same metric depth
+same metric depth. \red{consider having a 3d visualizaiton instead to capture real life}
 
 \begin{figure}[htbp]
   \centering
@@ -155,7 +159,7 @@ exactly as released: its weights are frozen and no layer is modified or fine-tun
     processed by a DINOv2 ViT encoder. Features from four intermediate layers are reassembled
     into feature maps at $\tfrac{1}{4}$ to $\tfrac{1}{32}$ of the input resolution, fused from
     coarse to fine by the DPT decoder, and upsampled by the head into a dense relative depth map
-    $\hat{D}$, in which brighter values are nearer. All weights are used frozen, as released.}
+    $\hat{D}$. All weights are used frozen, as released.}
   \label{fig:dav2-architecture}
 \end{figure}
 
@@ -169,11 +173,10 @@ labels roughly $62$ million unlabeled real images, and the released models are t
 pseudo-labels. Exposure to this large and varied set of real scenes is what allows the model to
 generalize zero-shot to our indoor environment, so it can be deployed without fine-tuning.
 
-Selecting a depth estimator for a small, battery-powered robot involves more than accuracy. We
+\red{trim section }Selecting a depth estimator for a small, battery-powered robot involves more than accuracy. We
 evaluated candidate models against five criteria: (1) zero-shot accuracy, since the model is
 deployed without fine-tuning; (2) model size, which bounds inference speed and memory on embedded
-hardware; (3) the availability of multiple model sizes, so that accuracy can
-be traded for speed; and (4) the license under which the weights are released.
+hardware; and (3) the license under which the weights are released.
 Table~\ref{tab:dav2-comparison} summarizes the accuracy and size of DAv2 against its predecessor
 and against MiDaS, using the AbsRel and $\delta_1$ metrics defined in Section~\ref{sec:mde-metrics}.
 
@@ -202,6 +205,8 @@ and against MiDaS, using the AbsRel and $\delta_1$ metrics defined in Section~\r
   \end{tabular}
 \end{table}
 
+\red{include Marigold?}
+
 Two observations from Table~\ref{tab:dav2-comparison} guide our choice. First, on the standard
 KITTI and NYU-D benchmarks, DAv2 performs on par with Depth Anything V1 rather than clearly
 surpassing it; Yang et al.\ attribute this to the noisy ground truth of these benchmarks, which
@@ -216,35 +221,12 @@ points on DA-2K, with $13\times$ fewer parameters. DAv2 is also more than $10\ti
 recent models built on Stable Diffusion~\cite{DepthAnythingV2}, which rules those models out for
 real-time use on the rover.
 
-Despite these strengths, DAv2 inherits the failure modes common to monocular depth
-estimation~\red{[]}, several of which occur in the indoor environments where the Cyclops rover
-operates. We list them here because the rest of the system must tolerate them:
-\begin{itemize}
-  \item \textbf{Glass and transparent surfaces.} A glass door or wall may be predicted at the
-    depth of the scene behind it, so a solid obstacle appears as free space.
-  \item \textbf{Mirrors.} A mirror is predicted at the depth of the reflected scene rather than
-    at the depth of the mirror itself.
-  \item \textbf{Reflective floors.} Polished floors reflect walls and ceiling lights, which can
-    make patches of floor appear to recede or protrude. This corrupts not only obstacle
-    detection but also the ground-plane pixels used for metric calibration
-    (Section~\ref{sec:metric-scale}).
-  \item \textbf{Textureless surfaces.} Blank walls and uniformly colored floors offer few local
-    depth cues, so their predicted depth relies heavily on surrounding context and is less
-    reliable.
-\end{itemize}
-Unlike sensor noise, these errors
-cannot be removed by averaging over time, and must
-instead be accommodated by the localization layer if MDE is used for localization. 
-The measurement model in
-Chapter~\ref{ch:localization} is designed with these failure modes in mind, so that a single
- wrong range reading cannot overturn an otherwise consistent estimate of the rover's pose.
-
 Weighing these criteria, the Cyclops rover runs DAv2-Small, the variant with the ViT-S encoder
 (Figure~\ref{fig:dav2-architecture}). It is the smallest released model, at $24.8$M parameters,
 yet its accuracy is close to that of DAv2-Large (Table~\ref{tab:dav2-comparison}), and its zero-shot
 generalization means it can be used as released. It is also the only variant whose weights are
 released under the permissive Apache-2.0 license; the Base and Large models are restricted to
-non-commercial use under CC-BY-NC-4.0~\red{[]}.  The measured inference latency on the rover is
+non-commercial use under CC-BY-NC-4.0~\cite{dav2github}.  The measured inference latency on the rover is
 reported in Chapter~\ref{ch:results}.
 
 
@@ -320,15 +302,19 @@ common axis. The solution is to train the model to predict relative depth, which
 the scale and shift of each source individually; we describe this alignment in
 Section~\ref{sec:alignment}.
 
-We acknowledge that several recent models are trained to predict metric depth~\cite{DepthAnythingV2,MoGe}
-directly. However, as Figure~\ref{fig:scale-ambiguity} illustrates, a single image does not
-contain the information needed to determine absolute scale, \red{read DAV2 metric model so such models must infer metric depth from
-their training data. with different camera heights and object sizes; different from training data vs actual data}. When
-these characteristic of the scene do not match the deployment setting, for example a different camera mount height,
-the predicted scale is unreliable. In our
-preliminary trials, off-the-shelf metric models were noticeably less accurate on the Cyclops
-rover, whose low camera mounting differs from that of typical training data, and incurred
-roughly $100$~ms of additional inference latency. For these reasons, we use a relative depth model
+We acknowledge that several recent models are trained to predict metric depth
+directly~\cite{DepthAnythingV2,MoGe}. However, as Figure~\ref{fig:scale-ambiguity} illustrates, a
+single image does not contain the information needed to determine absolute scale. A metric model
+must therefore infer scale from cues learned from its training data, such as the typical sizes of
+objects and the typical height and viewpoint of the camera. The metric variants of DAv2, for
+example, are fine-tuned on the synthetic Hypersim dataset~\cite{hypersim} for indoor scenes and on
+Virtual KITTI 2~\cite{virtualkitti2}, which replicates driving sequences recorded from a car-mounted camera,
+for outdoor scenes~\cite{DepthAnythingV2}. When the deployment setting departs from the training
+data, as it does for a camera mounted close to the floor on a small rover, these learned cues no
+longer hold and the predicted scale becomes unreliable. In our preliminary trials, off-the-shelf
+metric DAv2 were noticeably less accurate on the Cyclops rover \red{(if have time, rerun it and get metric depth accuracy)} 
+and incurred roughly $100$~ms of
+additional inference latency. For these reasons, we use a relative depth model
 and recover metric scale from the known geometry of the rover itself
 (Section~\ref{sec:metric-scale}). A formal comparison between metric depth models and our approach
 is left to future work.
@@ -338,17 +324,17 @@ is left to future work.
 
 To convert the output of a relative depth model into metric distance, we must make the
 approximation in Equation~\eqref{eq:inverse-depth} precise, that is, specify exactly how
-$z(u,v)$ is obtained from $\hat{d}(u,v)$. This relationship is set by how the model was trained,
-and in particular by how its loss function compares predictions to ground truth. The difficulty
-is that, as noted in Section~\ref{sec:relative-depth}, the datasets used to train zero-shot MDE
+$\hat{z}(u,v)$ is obtained from $\hat{d}(u,v)$. This relationship is set by how the model was trained,
+and in particular by how its loss function compares predictions to ground truth. 
+
+As noted in Section~\ref{sec:relative-depth}, the datasets used to train zero-shot MDE
 models do not share a common scale or shift. A LiDAR dataset supplies metric depth directly,
 whereas a stereo dataset supplies only disparity, which can be converted to metric depth only with a
 focal length and stereo baseline that are often unknown for web-scraped stereo images and 3D films.
-
-Ranftl et al.\ resolved this in MiDaS~\cite{MiDaS} by aligning each prediction to its ground
+Ranftl et al.~\cite{MiDaS} resolved this mismatched dataset problem by aligning each prediction to its ground
 truth before computing the loss. For every training image, the scale $a$ and shift $b$ that best
 fit the predicted disparity to the ground truth are solved in closed form, and only the error
-remaining after this alignment is penalized. The network is thus judged on the structure of the
+remaining after this \emph{alignment} is penalized. The network is thus judged on the structure of the
 scene rather than on the arbitrary scale and shift of each dataset. Depth Anything V2 is trained
 with the same affine-invariant approach~\cite{DepthAnythingV2}.
 
@@ -360,6 +346,7 @@ $\hat{d}(u,v)$ and the estimated metric depth $\hat{z}(u,v)$ at each pixel.
   \frac{1}{\hat{z}(u,v)} \;=\; a\,\hat{d}(u,v) + b
   \label{eq:affine-disparity}
 \end{equation}
+
 Equation~\eqref{eq:affine-disparity} has two consequences for this work. First, recovering metric
 depth reduces to recovering just two scalars, $a$ and $b$, since the network already supplies
 the per-pixel structure of the scene. Second, because $a$ and $b$ were fitted separately for every
@@ -371,13 +358,71 @@ known from the camera's mounting geometry, as described in Section~\ref{sec:metr
 
 \subsection{Recovering Metric Scale}
 \label{sec:metric-scale}
-\red{Include a diagram of our approach mde model to depth}
+To estimate $a$ and $b$ in Equation~\eqref{eq:affine-disparity}, we exploit the mounting
+geometry of the camera. The Cyclops rover drives on a flat floor, and its camera is rigidly
+mounted to the front of the chassis (Figure~\ref{fig:cyclops-rover}), so the height and tilt of
+the camera relative to the ground never change. Consequently, a pixel that images the floor
+always images the same point on the floor relative to the camera, and the metric depth at that
+pixel stays constant from frame to frame. Such pixels provide a fixed set of reference depths
+against which every new prediction can be aligned.
 
-that we foudn too slow on embedded hardware with no GPU thus moving to laptop
+This method of recovering metric scale give our second constraint to the robot's 
+environmeny: that
+it operates on a ground plane and anything above that ground plane is an obstacle
+
+We select $N = 96$ of these pixels, which we call \emph{ground points}. Let
+$(u_k, v_k)$ denote the image location of the $k$-th ground point and $z^{\mathrm{g}}_k$ its known
+metric depth, for $k = 1, \dots, N$.
+
+Figure~\ref{fig:ground-points} shows the checkerboard target used to obtain the ground points.
+The checkerboard is laid flat on the floor in front of the rover, and each of its inner corners
+serves as one ground point; the figure annotates every corner with its depth $z^{\mathrm{g}}_k$.
+Because the size of the checkerboard squares is known, the 3D position of each corner in the
+checkerboard's own coordinate frame is also known. Given these 3D positions, their detected pixel
+locations, and the camera intrinsics, OpenCV's \texttt{solvePnP} function estimates the rotation
+and translation of the checkerboard relative to the camera by solving the Perspective-n-Point
+problem~\red{[]}. Applying this transformation yields the coordinates of every corner in the
+camera frame. We keep only the $z$ coordinate, since depth along the optical axis is the quantity
+that MDE predicts.
+
+\begin{figure}[htbp]
+  \centering
+  % TODO: replace with \includegraphics[width=0.8\textwidth]{figures/ground-points.png}
+  \fbox{\parbox[c][0.4\textwidth][c]{0.8\textwidth}{\centering Placeholder: checkerboard ground points annotated with depth}}
+  \caption{Checkerboard target on the floor in front of the Cyclops rover. Each inner corner is a
+    ground point, annotated with its metric depth $z^{\mathrm{g}}_k$.}
+  \label{fig:ground-points}
+\end{figure}
+
+With the ground points fixed, the alignment parameters are re-fit on every frame. For a new image,
+let $\hat{d}_k = \hat{d}(u_k, v_k)$ denote the model's relative disparity at the $k$-th ground
+point. By Equation~\eqref{eq:affine-disparity}, the known depths should satisfy
+$1/z^{\mathrm{g}}_k \approx a\,\hat{d}_k + b$. Equation~\eqref{eq:ridge-fit} depicts the ridge
+regression objective minimized to find $a$ and $b$, where $\lambda > 0$ is a regularization weight
+that discourages large values of the scale.
+\begin{equation}
+  (a^{*}, b^{*}) \;=\; \arg\min_{a,\,b} \;\sum_{k=1}^{N}
+    \left( a\,\hat{d}_k + b - \frac{1}{z^{\mathrm{g}}_k} \right)^{2} + \lambda\,a^{2}
+  \label{eq:ridge-fit}
+\end{equation}
+The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affine-disparity} to
+convert the relative disparity $\hat{d}(u,v)$ at every pixel into metric depth $\hat{z}(u,v)$.
+
+
+
+
+
+\red{Also filter that which is not ground point}
+
+
+
+
+
 
 
 \section{Monocular Depth to Range Finder}
 diagram of image to mde to laptop etc
+that we foudn too slow on embedded hardware with no GPU thus moving to laptop
 \label{sec:mde-to-range}
 
 
