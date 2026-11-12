@@ -9,7 +9,7 @@ DVI	:= $(OUT)/$(PROJ).dvi
 PDF	:= $(OUT)/$(PROJ).pdf
 
 # Can also use pdflatex, if preferred
-CMDLATEX := latex -output-directory=$(OUT)
+CMDLATEX := latex -synctex=1 -output-directory=$(OUT)
 CMDPDF   := dvipdf
 
 PDFVIEWER := evince

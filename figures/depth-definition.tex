@@ -1,0 +1,52 @@
+% Definition of depth z(u,v) in the metric depth map Z.
+%
+% Top-down view of the camera. The depth of a scene point is its distance
+% measured along the optical axis (the Z coordinate in the camera frame),
+% NOT the Euclidean distance along the ray from the camera to the point.
+% The two form the leg and hypotenuse of a right triangle; they coincide
+% only for points on the optical axis.
+%
+% Pure vector TikZ -- solid fills and plain paths only. Do NOT introduce
+% opacity, shadings or fadings here: the Makefile builds via
+% latex -> dvips -> dvipdf, where those features are unreliable.
+%
+% Geometry: camera centre at the origin, optical axis along +x. A planar
+% wall faces the camera at x = 5. The scene point P sits on the wall at
+% (5, 2).
+\begin{tikzpicture}[>=Latex, line join=round, font=\small]
+
+  \colorlet{depthcol}{blue!70!black}
+
+  % ---- camera ---------------------------------------------------------
+  \fill[black!70] (-0.45,-0.30) rectangle (0,0.30);
+  \fill[black!70] (0,0) -- (0.35,0.45) -- (0.35,-0.45) -- cycle;
+  \node[anchor=north] at (-0.1,-0.55) {camera};
+
+  \node[anchor=north west,black!60] at (-0.6,2.75) {\emph{top-down view}};
+
+  % ---- optical axis ---------------------------------------------------
+  \draw[black!45,dashed] (0.35,0) -- (6.6,0)
+    node[black!55,anchor=west] {primary axis};
+
+  % ---- wall facing the camera (every point on it has the same depth) --
+  \fill[black!12] (5.0,-2.4) rectangle (5.25,2.4);
+  \draw[black!75] (5.0,-2.4) -- (5.0,2.4);
+  \node[anchor=south,align=center] at (5.15,2.45) {wall};
+
+  % ---- Euclidean distance: the ray from the camera to P ----------------
+  \draw[black!75] (0,0) -- (5,2)
+    node[midway,sloped,anchor=south,yshift=1pt] {Euclidean distance};
+
+  % ---- depth z(u,v): measured along the optical axis -------------------
+  \draw[|<->|,depthcol,line width=1pt] (0,-0.15) -- (5,-0.15);
+  \node[depthcol,anchor=north,fill=white,inner sep=1.5pt] at (3.1,-0.25)
+    {depth $z(u,v)$};
+
+  % right-angle marker where the optical axis meets the wall
+  \draw[black!65] (4.8,0) -- (4.8,0.2) -- (5.0,0.2);
+
+  % ---- the scene point -------------------------------------------------
+  \fill[black] (5,2) circle (2pt);
+  \node[anchor=west,align=left] at (5.3,2.0) {scene point $P$\\captured by pixel $(u,v)$};
+
+\end{tikzpicture}

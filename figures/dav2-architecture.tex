@@ -1,0 +1,93 @@
+% Depth Anything V2 architecture: DINOv2 ViT encoder + DPT decoder.
+%
+% Shown for the ViT-S encoder deployed on the Cyclops rover (12 transformer
+% layers, features tapped after layers 3, 6, 9 and 12). The whole network is
+% used frozen, exactly as released.
+%
+% Pure vector TikZ -- solid fills and plain paths only. Do NOT introduce
+% opacity, shadings or fadings here: the Makefile builds via
+% latex -> dvips -> dvipdf, where those features are unreliable.
+%
+% Layout: top row = input, patches, encoder blocks (left to right).
+%         middle row = DPT reassemble blocks, one under each encoder block.
+%         bottom row = DPT fusion blocks (coarse -> fine, right to left),
+%                      then the head and the output depth map.
+\begin{tikzpicture}[>=Latex, line join=round, font=\small]
+
+  \colorlet{enccol}{blue!12}
+  \colorlet{deccol}{orange!15}
+  \tikzset{
+    blk/.style={draw=black!70, rounded corners=2pt, align=center,
+                font=\scriptsize, inner xsep=1pt, minimum width=1.6cm},
+    flow/.style={->, thick, black!70},
+  }
+
+  % ---- input image ----------------------------------------------------
+  \fill[black!8] (0,3) rectangle (1.5,4.5);
+  \fill[black!25] (0,3) -- (1.5,3) -- (1.5,3.55) -- (0,3.55) -- cycle; % floor
+  \fill[black!45] (0.9,3.55) rectangle (1.25,4.05);                     % obstacle
+  \draw[black!70] (0,3) rectangle (1.5,4.5);
+  \node[anchor=south, align=center, font=\scriptsize] at (0.75,4.55)
+    {$I$\\$518 \times 518$};
+
+  % ---- patch grid -----------------------------------------------------
+  \fill[black!8] (2,3) rectangle (3.5,4.5);
+  \foreach \k in {1,2,3} {
+    \draw[black!50] (2+0.375*\k,3) -- (2+0.375*\k,4.5);
+    \draw[black!50] (2,3+0.375*\k) -- (3.5,3+0.375*\k);
+  }
+  \draw[black!70] (2,3) rectangle (3.5,4.5);
+  \node[anchor=south, align=center, font=\scriptsize] at (2.75,4.55)
+    {$14 \times 14$\\patches};
+  \draw[flow] (1.5,3.75) -- (2,3.75);
+
+  % ---- encoder blocks -------------------------------------------------
+  \foreach \i/\lab in {1/{Layers\\1--3}, 2/{Layers\\4--6},
+                       3/{Layers\\7--9}, 4/{Layers\\10--12}} {
+    \pgfmathsetmacro{\x}{4.1+2.0*(\i-1)}
+    \node[blk, fill=enccol, minimum height=1.1cm]
+      (E\i) at (\x+0.8,3.75) {\lab};
+  }
+  \draw[flow] (3.5,3.75) -- (E1.west);
+  \foreach \i/\j in {1/2, 2/3, 3/4} \draw[flow] (E\i.east) -- (E\j.west);
+
+  \draw[black!55, dashed, rounded corners=4pt] (3.9,3.0) rectangle (11.9,4.95);
+  \node[anchor=south east, font=\scriptsize\itshape, black!70] at (11.9,4.95)
+    {DINOv2 ViT-S encoder (frozen)};
+
+  % ---- reassemble blocks ----------------------------------------------
+  \foreach \i/\s in {1/{1/4}, 2/{1/8}, 3/{1/16}, 4/{1/32}} {
+    \node[blk, fill=deccol, minimum height=0.7cm]
+      (R\i) at (E\i |- 0,1.95) {Reassemble\\[-1pt]$\times\,\s$};
+    \draw[flow] (E\i.south) -- (R\i.north);
+  }
+
+  % ---- fusion blocks --------------------------------------------------
+  \foreach \i in {1,2,3,4} {
+    \node[blk, fill=deccol, minimum height=0.7cm]
+      (F\i) at (E\i |- 0,0.55) {Fusion};
+    \draw[flow] (R\i.south) -- (F\i.north);
+  }
+  \foreach \i/\j in {4/3, 3/2, 2/1} \draw[flow] (F\i.west) -- (F\j.east);
+
+  % ---- head -----------------------------------------------------------
+  \node[blk, fill=deccol, minimum width=1.5cm, minimum height=0.7cm]
+    (H) at (2.75,0.55) {Head};
+  \draw[flow] (F1.west) -- (H.east);
+
+  \draw[black!55, dashed, rounded corners=4pt] (1.85,0.0) rectangle (11.9,2.55);
+  \node[anchor=north east, font=\scriptsize\itshape, black!70] at (11.9,0.0)
+    {DPT decoder (frozen)};
+
+  % ---- output relative depth map --------------------------------------
+  % Banded fill suggests near (bright) to far (dark) without shadings.
+  \fill[black!15] (0,-0.2) rectangle (1.5,0.25);
+  \fill[black!40] (0,0.25) rectangle (1.5,0.7);
+  \fill[black!65] (0,0.7)  rectangle (1.5,1.3);
+  \fill[black!10] (0.9,0.25) rectangle (1.25,0.75);  % near obstacle = bright
+  \draw[black!70] (0,-0.2) rectangle (1.5,1.3);
+  \draw[flow] (H.west) -- (1.5,0.55);
+  \node[anchor=north, align=center, font=\scriptsize] at (0.75,-0.25)
+    {$\hat{D}$\\relative depth};
+
+\end{tikzpicture}
