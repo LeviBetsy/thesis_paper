@@ -1,14 +1,446 @@
-\chapter{Localization}
-\label{ch:localization}
-\red{diagram of whole architecture}
-\section{Monte Carlo Localization}
-Why we chose an occupancy grid and not a feature-based map
-Why MCL and not EKF, UKF
+\chapter{Monocular Depth Estimation}
+\label{ch:mde}
+\red{todo}
+\section{Introduction to Monocular Depth Estimation}
+Depth perception is the ability to determine the distance between a sensor and
+the surfaces in its surroundings. It is a crucial component of robotic
+navigation, mapping, and manipulation, as it allows
+robots to perceive the 3D structure of their environment.
+Depth perception can be performed with active sensors such as
+LiDAR, ultrasonic rangefinders~\cite{Moravec_Sonar}, and
+time-of-flight cameras~\cite{ToF}, or through stereo
+vision~\cite{stereo}, which estimates depth by triangulating the disparity
+between matched pixels in two calibrated cameras.
 
-\section{Cyclops Rover Motion Model}
-What specifically did we do 
-\section{Cyclops Rover Measurement Model}
-Latency measured from laptop to be around 300ms
+
+Monocular depth estimation (MDE), seeks to recover a depth map
+from a single RGB image and no additional hardware. In this sense, the goal of MDE is most similar
+to that of an RGB-D camera, which uses an infrared projector to cast a structured grid of laser dots
+onto the scene and infers per-pixel depth from how that pattern is distorted by scene geometry~\cite{rgbd}; MDE
+aims to recover the same dense, per-pixel depth map of an RGB image without
+any active infrared projection. 
+
+
+Our work leverages transformer-based machine learning models to predict 
+depth of each pixel in an RGB image. MDE models are gaining more and more development
+and have become more and more reliable~\cite{DPT,zoedepth, DepthAnythingV2} in the task of predicting depth.
+Monocular depth estimation is particularly attractive for embedded and resource-constrained
+robotic platforms, such as the cyclops rover, because it removes the need for a
+dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
+and power draw.
+
+\subsection{Problem Formulation and Notation}
+\label{sec:mde-formulation}
+Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$,
+and let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth map. An entry $z(u,v)$ 
+is the distance (in meters) along the camera's primary axis of the scene point captured by the image
+at pixel $(u,v)$. Figure~\ref{fig:depth-definition} is a visual representation of this definition.
+In the visualization, all points on the wall that is displayed in the captured image would have the
+same metric depth
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/depth-definition}
+  \caption[Definition of depth in a depth map]{Definition of depth in a depth map, shown from
+    above. The scene point $P$ is imaged at pixel $(u,v)$. Its depth $z(u,v)$ is the distance from
+    the camera measured along the optical axis not the Euclidean distance from the camera to $P$.}
+  \label{fig:depth-definition}
+\end{figure}
+
+
+
+The goal of this thesis is to develop the function $f$ described in Eq~\ref{eq:mde-map}.
+Here, $\hat{Z}$ is an estimate of the true depth map $Z$, and each entry $\hat{z}(u,v)$
+approximates the true depth $z(u,v)$ at pixel $(u,v)$. The function $f$ maps a single
+RGB image $I$ to this estimated depth map $\hat{Z}$.
+\begin{equation}
+  f : \mathbb{R}^{H \times W \times 3} \rightarrow \mathbb{R}^{H \times W},
+  \qquad \hat{Z} = f(I),
+  \label{eq:mde-map}
+\end{equation}
+
+
+
+\subsection{Evaluating Depth Predictions}
+\label{sec:mde-metrics}
+To compare monocular depth estimation models, the literature reports a small set of standard
+metrics computed against ground-truth depth~\cite{Eigen}. We define the two most widely used here, as they
+are the metrics reported in the comparisons in Section~\ref{sec:DAV2}.
+
+Let $\Omega$ denote the set of pixels with valid ground-truth depth, $M = |\Omega|$, and let
+$z_i$ and $\hat{z}_i$ denote the true and predicted depth at the $i$-th pixel in $\Omega$.
+
+\paragraph{Absolute relative error (AbsRel).} The average error relative to the true depth,
+so that a 10\,cm error at 1\,m is penalized as much as a 1\,m error at 10\,m. Lower is better.
+\begin{equation}
+  \mathrm{AbsRel} = \frac{1}{M} \sum_{i \in \Omega} \frac{|\hat{z}_i - z_i|}{z_i}
+  \label{eq:absrel}
+\end{equation}
+
+\paragraph{Threshold accuracy ($\delta_1$).} The fraction of pixels whose predicted depth is
+within a factor of $1.25$ of the true depth (i.e.\ off by less than 25\%). Higher is better.
+\begin{equation}
+  \delta_1 = \frac{1}{M} \sum_{i \in \Omega}
+  \mathds{1}\!\left[\max\!\left(\frac{\hat{z}_i}{z_i}, \frac{z_i}{\hat{z}_i}\right) < 1.25\right]
+  \label{eq:delta1}
+\end{equation}
+
+Note that for relative depth models, these metrics are computed after the prediction has been
+aligned in scale and shift to the ground truth; alignment and its role in our system are
+discussed in Section~\ref{sec:alignment}.
+
+\section{Neural Network Architecture in Monocular Depth Estimation}
+\label{sec:vit-mde}
+This section provides background on the vision transformer (ViT) architecture
+that state-of-the-art monocular depth estimation models employ, and motivates our
+selection of Depth Anything V2 (DAv2)~\cite{DepthAnythingV2} as the depth
+estimator deployed in this work. We use DAv2 as a pretrained model
+without modification or fine-tuning of the underlying architecture.
+
+
+\subsection{Transformers for Dense Prediction}
+Early learned MDE model~\cite{MiDaS,Eigen}, used convolutional
+neural network (CNN) encoder--decoder architectures, in which a convolutional backbone extracts
+image features and a decoder upsamples them into a dense depth map. The Vision Transformer
+(ViT)~\cite{ViT} later adapted the transformer architecture, originally developed for natural
+language processing~\cite{Transformer}, to images by treating an image as a sequence of
+fixed-size patches. Ranftl et al.\ replaced the convolutional encoder of MiDaS with a ViT in the
+Dense Prediction Transformer (DPT), improving zero-shot depth estimation accuracy by up to $28\%$
+in relative performance over a state-of-the-art fully convolutional network~\cite{DPT}.
+ViT-based encoders have since become the foundation of most state-of-the-art MDE models,
+including Depth Anything V2~\cite{DepthAnythingV2}, which pairs a DINOv2 ViT encoder with a
+DPT decoder.
+
+The advantage of the ViT stems from a difference in \emph{inductive bias}, the assumptions an
+architecture builds in about the structure of its input. A convolution applies a small kernel to
+each local neighborhood, so a CNN assumes that nearby pixels matter most and builds global context
+only indirectly, by stacking layers and downsampling until its \emph{receptive field} (the region
+of the input influencing a feature) covers the scene. Through self-attention, a ViT instead lets
+every patch attend to every other patch, giving global context from the first layer~\cite{ViT}.
+This matters for MDE because depth cues are rarely local: judging the distance to an obstacle
+depends on where it meets the ground plane, the perspective lines converging toward the horizon,
+and its size relative to other objects, all of which may be spread across the image.
+
+The CNN's path to global context also carries a cost. As Ranftl et al.\ note, progressive
+downsampling loses feature resolution and granularity in the deeper stages, and this detail is
+difficult to recover in the decoder, which is a poor fit for dense, per-pixel tasks such as
+MDE~\cite{DPT}. A ViT instead maintains a constant feature resolution throughout the encoder, so
+global context is available without sacrificing spatial detail at successive stages~\cite{DPT}.
+
+
+
+
+\subsection{Depth Anything V2}
+\label{sec:DAV2}
+Depth Anything V2~\cite{DepthAnythingV2} is the depth estimation model deployed on the Cyclops
+rover. Architecturally, it is a direct instance of the encoder--decoder design described above: a
+DINOv2~\cite{DINOv2} ViT encoder followed by a DPT~\cite{DPT} decoder. The input image is resized to
+$518 \times 518$ pixels and divided into $14 \times 14$ patches, giving a $37 \times 37$ grid of
+patch tokens that the encoder processes with self-attention. Rather than using only the final
+encoder layer, DAv2 takes features from four intermediate layers of the encoder. The DPT decoder
+\emph{reassembles} each set of tokens back into an image-like feature map at a different
+resolution, \emph{fuses} these maps from coarse to fine, and a small convolutional head upsamples
+the result into a dense relative depth map $\hat{D}$ at the input resolution.
+A full treatment of the encoder and decoder is beyond the scope of this
+thesis; we refer the reader to Oquab et al.~\cite{DINOv2} for DINOv2 and
+Ranftl et al.~\cite{DPT} for the DPT decoder.
+Figure~\ref{fig:dav2-architecture} summarizes this pipeline. In this work, the network is used
+exactly as released: its weights are frozen and no layer is modified or fine-tuned.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/dav2-architecture}
+  \caption[Depth Anything V2 architecture]{Depth Anything V2 architecture, shown for the ViT-S
+    encoder deployed on the Cyclops rover. The image is split into $14 \times 14$ patches and
+    processed by a DINOv2 ViT encoder. Features from four intermediate layers are reassembled
+    into feature maps at $\tfrac{1}{4}$ to $\tfrac{1}{32}$ of the input resolution, fused from
+    coarse to fine by the DPT decoder, and upsampled by the head into a dense relative depth map
+    $\hat{D}$, in which brighter values are nearer. All weights are used frozen, as released.}
+  \label{fig:dav2-architecture}
+\end{figure}
+
+DAv2 is trained in two stages, each of which gives the model a property useful to the Cyclops
+rover~\cite{DepthAnythingV2}. First, a teacher model is trained on roughly $595$K synthetic
+images rendered from 3D scenes. Because rendered depth is exact at every pixel, including at
+object boundaries where real depth sensors and stereo matching produce blurred or missing
+values, the model learns to predict sharp depth discontinuities at obstacle edges, which become
+sharp edges in the range scan derived in Section~\ref{sec:mde-to-range}. Second, the teacher
+labels roughly $62$ million unlabeled real images, and the released models are trained on these
+pseudo-labels. Exposure to this large and varied set of real scenes is what allows the model to
+generalize zero-shot to our indoor environment, so it can be deployed without fine-tuning.
+
+Selecting a depth estimator for a small, battery-powered robot involves more than accuracy. We
+evaluated candidate models against five criteria: (1) zero-shot accuracy, since the model is
+deployed without fine-tuning; (2) model size, which bounds inference speed and memory on embedded
+hardware; (3) the availability of multiple model sizes, so that accuracy can
+be traded for speed; and (4) the license under which the weights are released.
+Table~\ref{tab:dav2-comparison} summarizes the accuracy and size of DAv2 against its predecessor
+and against MiDaS, using the AbsRel and $\delta_1$ metrics defined in Section~\ref{sec:mde-metrics}.
+
+\begin{table}[htbp]
+  \centering
+  \caption[Zero-shot accuracy of Depth Anything V2]{Zero-shot relative depth accuracy and model
+    size. KITTI and NYU-D results are AbsRel ($\downarrow$) and $\delta_1$ ($\uparrow$) after
+    scale-and-shift alignment; DA-2K is the percentage of point pairs whose depth order is
+    predicted correctly ($\uparrow$). Accuracy values are from Yang et
+    al.~\cite{DepthAnythingV2} (Tables~2 and~3); parameter counts are from the official
+    release~\red{[]}.}
+  \label{tab:dav2-comparison}
+  \small
+  \begin{tabular}{l l r c c c c c}
+    \hline
+    & & & \multicolumn{2}{c}{KITTI} & \multicolumn{2}{c}{NYU-D} & DA-2K \\
+    Model & Encoder & Params & AbsRel & $\delta_1$ & AbsRel & $\delta_1$ & Acc.\ (\%) \\
+    \hline
+    MiDaS V3.1~\cite{MiDaS} & ViT-L & -- & 0.127 & 0.850 & 0.048 & 0.980 & -- \\
+    Depth Anything V1 & ViT-S & -- & 0.080 & 0.936 & 0.053 & 0.972 & 88.5 \\
+    \hline
+    DAv2 & ViT-S & 24.8M  & 0.078 & 0.936 & 0.053 & 0.973 & 95.3 \\
+    DAv2 & ViT-B & 97.5M  & 0.078 & 0.939 & 0.049 & 0.976 & 97.0 \\
+    DAv2 & ViT-L & 335.3M & 0.074 & 0.946 & 0.045 & 0.979 & 97.1 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Two observations from Table~\ref{tab:dav2-comparison} guide our choice. First, on the standard
+KITTI and NYU-D benchmarks, DAv2 performs on par with Depth Anything V1 rather than clearly
+surpassing it; Yang et al.\ attribute this to the noisy ground truth of these benchmarks, which
+cannot reward the finer detail that synthetic training provides~\cite{DepthAnythingV2}. That
+improvement appears instead on DA-2K, a benchmark the authors introduce with sparse but precise
+pairwise annotations across eight scene types, where even the smallest DAv2 model (95.3\%)
+outperforms V1 (88.5\%) and recent diffusion-based models such as Marigold
+(86.8\%)~\cite{DepthAnythingV2}. Because DA-2K was proposed by the same authors, we treat it as
+supporting evidence rather than a neutral benchmark. Second, accuracy saturates quickly with model
+size: DAv2-Small is within $0.004$ AbsRel of DAv2-Large on KITTI and within $1.8$ percentage
+points on DA-2K, with $13\times$ fewer parameters. DAv2 is also more than $10\times$ faster than
+recent models built on Stable Diffusion~\cite{DepthAnythingV2}, which rules those models out for
+real-time use on the rover.
+
+Despite these strengths, DAv2 inherits the failure modes common to monocular depth
+estimation~\red{[]}, several of which occur in the indoor environments where the Cyclops rover
+operates. We list them here because the rest of the system must tolerate them:
+\begin{itemize}
+  \item \textbf{Glass and transparent surfaces.} A glass door or wall may be predicted at the
+    depth of the scene behind it, so a solid obstacle appears as free space.
+  \item \textbf{Mirrors.} A mirror is predicted at the depth of the reflected scene rather than
+    at the depth of the mirror itself.
+  \item \textbf{Reflective floors.} Polished floors reflect walls and ceiling lights, which can
+    make patches of floor appear to recede or protrude. This corrupts not only obstacle
+    detection but also the ground-plane pixels used for metric calibration
+    (Section~\ref{sec:metric-scale}).
+  \item \textbf{Textureless surfaces.} Blank walls and uniformly colored floors offer few local
+    depth cues, so their predicted depth relies heavily on surrounding context and is less
+    reliable.
+\end{itemize}
+Unlike sensor noise, these errors
+cannot be removed by averaging over time, and must
+instead be accommodated by the localization layer if MDE is used for localization. 
+The measurement model in
+Chapter~\ref{ch:localization} is designed with these failure modes in mind, so that a single
+ wrong range reading cannot overturn an otherwise consistent estimate of the rover's pose.
+
+Weighing these criteria, the Cyclops rover runs DAv2-Small, the variant with the ViT-S encoder
+(Figure~\ref{fig:dav2-architecture}). It is the smallest released model, at $24.8$M parameters,
+yet its accuracy is close to that of DAv2-Large (Table~\ref{tab:dav2-comparison}), and its zero-shot
+generalization means it can be used as released. It is also the only variant whose weights are
+released under the permissive Apache-2.0 license; the Base and Large models are restricted to
+non-commercial use under CC-BY-NC-4.0~\red{[]}.  The measured inference latency on the rover is
+reported in Chapter~\ref{ch:results}.
+
+
+
+\section{Calibrating Metric Depth}
+\label{sec:depth-calibration}
+
+\subsection{Relative versus Metric Depth}
+\label{sec:relative-depth}
+Most off-the-shelf MDE models do not output meters. They output relative depth: a
+dense map that is unitless, typically normalized to $[0,1]$ over the image, and correct in
+ordering rather than in measurement. Relative depth describes how far the scene point at a pixel is compared with the points at
+every other pixel in the image, whereas metric depth gives its absolute distance from the camera
+in physical units (e.g., $50$~cm).
+
+Relative depth is inversely related to metric depth: a higher relative depth value at a pixel
+indicates that the scene point at that pixel is closer to the camera and vice versa. 
+For example, a predicted relative depth value of $0.5$ asserts that the
+pixel is nearer than one predicted at $0.1$; in the real scene, the pixel could be $5$ cm away or $80$ cm away. 
+The raw relative depth value can not be directly used for robotics application. 
+Knowing which object is nearest is of little use to a motion planner that must decide whether there is enough
+clearance to pass between two of them or a gripper to accurately manipulate an object.
+
+
+In this thesis, we denote
+the relative depth map by $D \in \mathbb{R}^{H \times W}$ and the model's estimate of it by
+$\hat{D}$, with entries $\hat{d}(u,v)$. Equation~\eqref{eq:inverse-depth} depicts the approximate
+inverse relationship between the estimated relative depth and the true metric depth at each pixel.
+This relationship holds only up to an unknown scale and shift, which we make precise in
+Equation~\eqref{eq:affine-disparity} of Section~\ref{sec:alignment}.
+\begin{equation}
+  \hat{d}(u,v) \;\approx\; \frac{1}{z(u,v)}
+  \label{eq:inverse-depth}
+\end{equation}
+Relative depth mirrors stereo vision, where the disparity between two matched pixels is inversely
+proportional to depth. Thus, relative depth may also be referred to as disparity
+in some sources~\cite{MiDaS}.
+
+
+The first reason models output relative depth is geometric, and is not a deficiency that better training could
+remove. Figure~\ref{fig:scale-ambiguity} illustrates this directly: 
+an object of size $s$ at distance $z$ and an object
+of size $2s$ at distance $2z$ fill the same cone of light rays to the camera, and
+therefore produce pixel-for-pixel identical images (figure on the right). Any MDE model will
+assign both images the same output as they are identical. 
+Thus why MDE is an ill-posed problem and MDE models have to output depth, it is not possible 
+to get metric depth from an image alone.
+Recovering metric depth requires additional information, such as a known object
+size, a known camera mounting height, or a second calibrated view. Our approach uses a known camera
+mounting height and calibrated points on the ground plane which we further describe in Section~\ref{sec:metric-scale}.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/scale-ambiguity}
+  \caption[Scale ambiguity in monocular depth estimation]{Scale ambiguity in monocular depth
+    estimation. An object of size $s$ at distance $z$ and an object of size $2s$ at distance $2z$
+    both produce the identical
+    image $I$.}
+  \label{fig:scale-ambiguity}
+\end{figure}
+
+
+The second reason MDE models output relative depth is a consequence of how modern zero-shot
+models are trained. Learned models, and Vision Transformers in particular, require large amounts
+of training data (on the order of tens of millions of images) to be accurate~\cite{ViT,DepthAnythingV2}.
+To assemble a dataset of this size, and to ensure that the model generalizes across many types
+of scenes rather than overfitting to a single dataset, models such as MiDas and Depth
+Anything are trained on a mixture of different sources. These sources include LiDAR-supervised data, RGB-D
+indoor captures, stereo photographs scraped from the web, structure-from-motion reconstructions,
+and frames extracted from 3D films~\cite{MiDaS,DPT}. These sources disagree about camera
+intrinsics, or raw stereo data might have an camera calibration. Thus depths drawn from different datasets cannot be placed on a
+common axis. The solution is to train the model to predict relative depth, which can be aligned to
+the scale and shift of each source individually; we describe this alignment in
+Section~\ref{sec:alignment}.
+
+We acknowledge that several recent models are trained to predict metric depth~\cite{DepthAnythingV2,MoGe}
+directly. However, as Figure~\ref{fig:scale-ambiguity} illustrates, a single image does not
+contain the information needed to determine absolute scale, \red{read DAV2 metric model so such models must infer metric depth from
+their training data. with different camera heights and object sizes; different from training data vs actual data}. When
+these characteristic of the scene do not match the deployment setting, for example a different camera mount height,
+the predicted scale is unreliable. In our
+preliminary trials, off-the-shelf metric models were noticeably less accurate on the Cyclops
+rover, whose low camera mounting differs from that of typical training data, and incurred
+roughly $100$~ms of additional inference latency. For these reasons, we use a relative depth model
+and recover metric scale from the known geometry of the rover itself
+(Section~\ref{sec:metric-scale}). A formal comparison between metric depth models and our approach
+is left to future work.
+
+\subsection{Affine-Invariant Disparity Output}
+\label{sec:alignment}
+
+To convert the output of a relative depth model into metric distance, we must make the
+approximation in Equation~\eqref{eq:inverse-depth} precise, that is, specify exactly how
+$z(u,v)$ is obtained from $\hat{d}(u,v)$. This relationship is set by how the model was trained,
+and in particular by how its loss function compares predictions to ground truth. The difficulty
+is that, as noted in Section~\ref{sec:relative-depth}, the datasets used to train zero-shot MDE
+models do not share a common scale or shift. A LiDAR dataset supplies metric depth directly,
+whereas a stereo dataset supplies only disparity, which can be converted to metric depth only with a
+focal length and stereo baseline that are often unknown for web-scraped stereo images and 3D films.
+
+Ranftl et al.\ resolved this in MiDaS~\cite{MiDaS} by aligning each prediction to its ground
+truth before computing the loss. For every training image, the scale $a$ and shift $b$ that best
+fit the predicted disparity to the ground truth are solved in closed form, and only the error
+remaining after this alignment is penalized. The network is thus judged on the structure of the
+scene rather than on the arbitrary scale and shift of each dataset. Depth Anything V2 is trained
+with the same affine-invariant approach~\cite{DepthAnythingV2}.
+
+Because $a$ and $b$ are fitted away before the loss is computed, the network is never taught
+their values, and its output is correct only up to an unknown affine transform in disparity
+space. Equation~\eqref{eq:affine-disparity} depicts this relationship between the model's output
+$\hat{d}(u,v)$ and the estimated metric depth $\hat{z}(u,v)$ at each pixel.
+\begin{equation}
+  \frac{1}{\hat{z}(u,v)} \;=\; a\,\hat{d}(u,v) + b
+  \label{eq:affine-disparity}
+\end{equation}
+Equation~\eqref{eq:affine-disparity} has two consequences for this work. First, recovering metric
+depth reduces to recovering just two scalars, $a$ and $b$, since the network already supplies
+the per-pixel structure of the scene. Second, because $a$ and $b$ were fitted separately for every
+training image, nothing constrains them to stay constant from one image to the next, so a
+one-time calibration is not guaranteed to remain valid as the scene changes. The Cyclops rover
+therefore re-estimates $a$ and $b$ on every frame, using ground-plane pixels whose metric depth is
+known from the camera's mounting geometry, as described in Section~\ref{sec:metric-scale}.
+
+
+\subsection{Recovering Metric Scale}
+\label{sec:metric-scale}
+\red{Include a diagram of our approach mde model to depth}
+
+that we foudn too slow on embedded hardware with no GPU thus moving to laptop
+
+
+\section{Monocular Depth to Range Finder}
+diagram of image to mde to laptop etc
+\label{sec:mde-to-range}
+
+
+\subsection{Back-Projection to 3D}
+
+The camera is modeled as an ideal pinhole with intrinsic matrix
+\begin{equation}
+  K = \begin{bmatrix}
+        f_x & 0   & c_x \\
+        0   & f_y & c_y \\
+        0   & 0   & 1
+      \end{bmatrix},
+  \label{eq:intrinsics}
+\end{equation}
+where $f_x, f_y$ are the focal lengths in pixels and $(c_x, c_y)$ is the principal point. A scene
+point $(X, Y, Z)$ expressed in the camera frame projects to
+\begin{equation}
+  u = f_x \frac{X}{z} + c_x,
+  \qquad
+  v = f_y \frac{Y}{z} + c_y,
+  \label{eq:projection}
+\end{equation}
+and, given a depth $z$ at pixel $(u,v)$, the corresponding scene point is recovered by
+back-projection:
+\begin{equation}
+  X = \frac{(u - c_x)\, z}{f_x},
+  \qquad
+  Y = \frac{(v - c_y)\, z}{f_y},
+  \qquad
+  Z = z .
+  \label{eq:backprojection}
+\end{equation}
+Equation~\eqref{eq:backprojection} is the mechanism by which Section~\ref{sec:mde-to-range}
+converts a depth map into the geometry of a range scan.
+
+Equation~\eqref{eq:projection} also makes the ill-posedness described above precise. Consider
+scaling the entire scene about the optical center by a factor $s > 0$, so that every scene point
+$(X, Y, Z)$ is mapped to $(sX, sY, sZ)$. The projected coordinates become
+\begin{equation}
+  u' = f_x \frac{sX}{sz} + c_x = u,
+  \qquad
+  v' = f_y \frac{sY}{sz} + c_y = v,
+  \label{eq:scale-ambiguity}
+\end{equation}
+which are unchanged, while every depth has been multiplied by $s$. The image is therefore
+\emph{invariant} to a uniform rescaling of the scene, even though the depth map is not. No
+function of $I$ alone, however expressive, can distinguish these cases; absolute scale is not
+merely difficult to estimate from a single image, it is not present in the image at all.
+
+\subsection{Ground-Plane and Ceiling Deletion}
+
+\subsection{Reduction to a 1D Angular Range Scan}
+\todo{The step that makes a camera behave like a range finder. The bearing of image column $u$ is
+$\theta(u) = \arctan\!\big((u - c_x)/f_x\big)$; partition the horizontal field of view into $K$
+angular bins matching the beam layout the measurement model of Chapter~\ref{ch:localization}
+expects, and take the minimum surviving obstacle range within each bin. Define the maximum usable
+range and the encoding of invalid or no-return beams.}
+
+\subsection{Noise Characterization}
+\todo{Characterize the error distribution of the resulting ranges as a function of true distance
+and bearing, including the heavy tail produced by depth-boundary bleed at object silhouettes.
+This distribution is the input to the beam model $p(z_t \mid x_t, m)$ in
+Chapter~\ref{ch:localization}.}
 
 %%% Local Variables: ***
 %%% mode: latex ***
