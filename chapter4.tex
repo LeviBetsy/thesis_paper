@@ -312,7 +312,7 @@ Virtual KITTI 2~\cite{virtualkitti2}, which replicates driving sequences recorde
 for outdoor scenes~\cite{DepthAnythingV2}. When the deployment setting departs from the training
 data, as it does for a camera mounted close to the floor on a small rover, these learned cues no
 longer hold and the predicted scale becomes unreliable. In our preliminary trials, off-the-shelf
-metric DAv2 were noticeably less accurate on the Cyclops rover \red{(if have time, rerun it and get metric depth accuracy)} 
+metric DAv2 were noticeably less accurate on the Cyclops rover \red{(around 20cm error at 40cm)} 
 and incurred roughly $100$~ms of
 additional inference latency. For these reasons, we use a relative depth model
 and recover metric scale from the known geometry of the rover itself
@@ -321,6 +321,8 @@ is left to future work.
 
 \subsection{Affine-Invariant Disparity Output}
 \label{sec:alignment}
+
+\red{Overexplaining? The formula is known do we need to restate it?}
 
 To convert the output of a relative depth model into metric distance, we must make the
 approximation in Equation~\eqref{eq:inverse-depth} precise, that is, specify exactly how
@@ -376,45 +378,44 @@ metric depth, for $k = 1, \dots, N$.
 
 Figure~\ref{fig:ground-points} shows the checkerboard target used to obtain the ground points.
 The checkerboard is laid flat on the floor in front of the rover, and each of its inner corners
-serves as one ground point; the figure annotates every corner with its depth $z^{\mathrm{g}}_k$.
+serves as one ground point; the figure annotates every corner with its depth $z^{\mathrm{g}}_k$ (meters).
 Because the size of the checkerboard squares is known, the 3D position of each corner in the
 checkerboard's own coordinate frame is also known. Given these 3D positions, their detected pixel
-locations, and the camera intrinsics, OpenCV's \texttt{solvePnP} function estimates the rotation
+locations, and the camera intrinsics, OpenCV's \texttt{solvePnP} function~\cite{opencv_library} estimates the rotation
 and translation of the checkerboard relative to the camera by solving the Perspective-n-Point
-problem~\red{[]}. Applying this transformation yields the coordinates of every corner in the
+problem~\cite{solvepnp}. Applying this transformation yields the coordinates of every corner in the
 camera frame. We keep only the $z$ coordinate, since depth along the optical axis is the quantity
 that MDE predicts.
 
 \begin{figure}[htbp]
   \centering
-  % TODO: replace with \includegraphics[width=0.8\textwidth]{figures/ground-points.png}
-  \fbox{\parbox[c][0.4\textwidth][c]{0.8\textwidth}{\centering Placeholder: checkerboard ground points annotated with depth}}
+  \includegraphics[width=0.8\textwidth]{figures/annotated_depth_ref13.jpg}
   \caption{Checkerboard target on the floor in front of the Cyclops rover. Each inner corner is a
-    ground point, annotated with its metric depth $z^{\mathrm{g}}_k$.}
+    ground point, annotated with its metric depth $z^{\mathrm{g}}_k$ (meters).}
   \label{fig:ground-points}
 \end{figure}
 
-With the ground points fixed, the alignment parameters are re-fit on every frame. For a new image,
-let $\hat{d}_k = \hat{d}(u_k, v_k)$ denote the model's relative disparity at the $k$-th ground
+\red{Do I have to justify }
+With the ground points fixed, the alignment parameters are recalculated on every frame. For a new image,
+let $\hat{d}^{\mathrm{g}}_k = \hat{d}(u_k, v_k)$ denote the model's relative disparity at the $k$-th ground
 point. By Equation~\eqref{eq:affine-disparity}, the known depths should satisfy
-$1/z^{\mathrm{g}}_k \approx a\,\hat{d}_k + b$. Equation~\eqref{eq:ridge-fit} depicts the ridge
+$1/z^{\mathrm{g}}_k \approx a\,\hat{d}^{\mathrm{g}}_k + b$. Equation~\eqref{eq:ridge-fit} depicts the ridge
 regression objective minimized to find $a$ and $b$, where $\lambda > 0$ is a regularization weight
 that discourages large values of the scale.
 \begin{equation}
   (a^{*}, b^{*}) \;=\; \arg\min_{a,\,b} \;\sum_{k=1}^{N}
-    \left( a\,\hat{d}_k + b - \frac{1}{z^{\mathrm{g}}_k} \right)^{2} + \lambda\,a^{2}
+    \left( a\,\hat{d}^{\mathrm{g}}_k + b - \frac{1}{z^{\mathrm{g}}_k} \right)^{2} + \lambda\,a^{2}
   \label{eq:ridge-fit}
 \end{equation}
 The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affine-disparity} to
 convert the relative disparity $\hat{d}(u,v)$ at every pixel into metric depth $\hat{z}(u,v)$.
 
 
+We over sampled the points but it was also good for obstacle and to confirm that
+the output was truly linear.
 
-
-
-\red{Also filter that which is not ground point}
-
-
+During devlopment we only needed to do two rows and did a relative depth
+that is smaller than the closer row (obstacle )
 
 
 
@@ -428,16 +429,7 @@ that we foudn too slow on embedded hardware with no GPU thus moving to laptop
 
 \subsection{Back-Projection to 3D}
 
-The camera is modeled as an ideal pinhole with intrinsic matrix
-\begin{equation}
-  K = \begin{bmatrix}
-        f_x & 0   & c_x \\
-        0   & f_y & c_y \\
-        0   & 0   & 1
-      \end{bmatrix},
-  \label{eq:intrinsics}
-\end{equation}
-where $f_x, f_y$ are the focal lengths in pixels and $(c_x, c_y)$ is the principal point. A scene
+ A scene
 point $(X, Y, Z)$ expressed in the camera frame projects to
 \begin{equation}
   u = f_x \frac{X}{z} + c_x,

@@ -1,0 +1,86 @@
+% Data flow of the Cyclops rover across its three computers.
+%
+% Three paths:
+%   1. Perception: camera -> Pi -> SSH tunnel -> laptop MDE -> SSH tunnel
+%      back -> Pi range finder (range per bearing angle).
+%   2. Command: Pi velocity loop -> UART -> MSP432 PI controller -> PWM ->
+%      H-bridge -> motors.
+%   3. Feedback: encoders -> MSP432 encoder counter -> UART (left/right
+%      counts) -> Pi velocity loop.
+%
+% Convention: text above an arrow is the data carried, text below it is the
+% link it travels over. Software modules are white boxes inside a shaded box
+% for the computer they run on; physical hardware is the grey column on the
+% right.
+%
+% Pure vector TikZ -- solid fills and plain paths only (no opacity, shadings
+% or fadings), so it also survives the latex -> dvipdf build. Group boxes use
+% hard-coded coordinates (no fit/backgrounds library) and are drawn first so
+% the module nodes sit on top of them.
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize,
+    module/.style={draw=black!75, fill=white, rounded corners=2pt,
+                   minimum width=2.4cm, text width=2.2cm, align=center,
+                   minimum height=0.8cm},
+    hw/.style={draw=black!75, fill=black!15,
+               minimum width=1.8cm, text width=1.6cm, align=center,
+               minimum height=0.8cm},
+    group/.style={draw=black!50, fill=black!4, rounded corners=4pt},
+    title/.style={font=\footnotesize\bfseries, anchor=north},
+    flow/.style={->, black!80, line width=0.6pt},
+    lbl/.style={align=center, inner sep=1.5pt},
+  ]
+
+  % ---- computers (drawn first, so modules sit on top) -------------------
+  \draw[group] (-0.3,-0.75) rectangle (2.7,2.75);
+  \node[title] at (1.2,2.7) {Laptop};
+
+  \draw[group] (3.9,-3.45) rectangle (6.9,2.75);
+  \node[title] at (5.4,2.7) {Raspberry Pi};
+
+  \draw[group] (8.4,-3.45) rectangle (11.4,-0.75);
+  \node[title] at (9.9,-0.8) {MSP432};
+
+  % ---- software modules ---------------------------------------------------
+  \node[module, minimum height=2.2cm] (mde) at (1.2,0.9)
+       {Monocular depth\\estimation\\(ViT)};
+
+  \node[module] (cap) at (5.4,1.6)  {Frame capture};
+  \node[module] (rng) at (5.4,0.2)  {Range finder};
+  \node[module, minimum height=1.8cm] (vel) at (5.4,-2.2) {Velocity loop};
+
+  \node[module] (pid) at (9.9,-1.6) {PI speed\\controller};
+  \node[module] (cnt) at (9.9,-2.8) {Encoder\\counter};
+
+  % ---- physical hardware -------------------------------------------------
+  \node[hw] (cam)  at (13.6,1.6)  {Camera};
+  \node[hw] (hb)   at (13.6,-1.6) {H-bridge};
+  \node[hw] (mot)  at (13.6,-2.8) {Motors\\(L, R)};
+  \node[hw] (encs) at (13.6,-4.0) {Encoders\\(L, R)};
+
+  % ---- perception path ----------------------------------------------------
+  \draw[flow] (cam.west) -- (cap.east)
+        node[lbl, midway, above] {image frames};
+  \draw[flow] (cap.west) -- (cap.west -| mde.east)
+        node[lbl, midway, above] {frames}
+        node[lbl, midway, below] {SSH};
+  \draw[flow] (rng.west -| mde.east) -- (rng.west)
+        node[lbl, midway, above] {range per\\angle}
+        node[lbl, midway, below] {SSH};
+
+  % ---- command path ------------------------------------------------------
+  \draw[flow] (vel.east |- pid.west) -- (pid.west)
+        node[lbl, midway, above] {target speeds}
+        node[lbl, midway, below] {UART};
+  \draw[flow] (pid.east) -- (hb.west)
+        node[lbl, midway, above] {PWM};
+  \draw[flow] (hb.south) -- (mot.north);
+
+  % ---- feedback path -----------------------------------------------------
+  \draw[black!60, dashed, line width=0.6pt] (mot.south) -- (encs.north);
+  \draw[flow] (encs.west) -| (cnt.south)
+        node[lbl, pos=0.25, below] {A/B pulses};
+  \draw[flow] (cnt.west) -- (cnt.west -| vel.east)
+        node[lbl, midway, above] {L/R counts}
+        node[lbl, midway, below] {UART};
+
+\end{tikzpicture}

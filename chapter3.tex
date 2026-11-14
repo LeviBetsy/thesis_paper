@@ -9,8 +9,35 @@
   \label{fig:cyclops-rover}
 \end{figure}
 
-\section{Camera}
-How we calibrated the camera from a fisheye to a pinhole
+\section{Robot Architecture}
+Figure~\ref{fig:data-flow} depicts the flow of data between the laptop, the Raspberry Pi,
+the MSP432, and the rover hardware.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/data-flow}
+  \caption{Data flow of the Cyclops rover. Text above an arrow is the data carried; text
+    below it is the link it travels over. Camera frames are sent from the Raspberry Pi over
+    an SSH tunnel to the laptop, which runs monocular depth estimation and returns ranges
+    per bearing angle. The Pi's velocity loop sends target wheel speeds over UART to the
+    MSP432, whose PI controller drives the motors through an H-bridge. The encoder counts
+    for the left and right wheels go back to the Pi over the same UART link.}
+  \label{fig:data-flow}
+\end{figure}
+
+Diagram of models and such and streams. Pi to msp432.
+
+Explain why the work is split:in two boards
+
+For UART, give the baud rate, the message format (command and telemetry packets), and how often each is sent.
+
+For the encoders, say whether they’re quadrature, how many counts per revolution, and how you turn counts into speed. Counting edges over a fixed timer window behaves differently from timing the gap between edges, especially at low speed.
+
+Consider a small table of loop rates, but we do not care for this thesis
+
+Battery do not care
+
+\section{PID Control}
 
 PID Control
 Do a test with no PID, see how speed changes through time with no change in control value
@@ -24,8 +51,16 @@ How i tuned? ask nickelsw
 test with P, output speed result (more than 5 trials) than test with PI if short of target
 then test with PID if overshoots 
 
+\section{Camera}
 
-%%% Local Variables: ***
-%%% mode: latex ***
-%%% TeX-master: "thesis.tex" ***
-%%% End: ***
+The camera is modeled as an ideal pinhole with intrinsic matrix
+\begin{equation}
+  K = \begin{bmatrix}
+        f_x & 0   & c_x \\
+        0   & f_y & c_y \\
+        0   & 0   & 1
+      \end{bmatrix},
+  \label{eq:intrinsics}
+\end{equation}
+where $f_x, f_y$ are the focal lengths in pixels and $(c_x, c_y)$ is the principal point.
+How we calibrated the camera from a fisheye to a pinhole
