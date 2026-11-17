@@ -1,0 +1,59 @@
+% Trinity University departmental honors thesis cover page.
+% Edit the fields below. Leave a field empty ({}) to print a blank line
+% that can be filled in by hand.
+\newcommand{\coverTitle}{\Thesistitle}      % thesis title (defaults to preliminaries.tex)
+\newcommand{\coverAuthor}{LEVI LE}      % author (defaults to preliminaries.tex)
+\newcommand{\coverDepartment}{}             % e.g. Engineering Science
+\newcommand{\coverDate}{NOVEMBER 20, 2026}                   % e.g. April 20, 2026
+\newcommand{\coverAdvisor}{}                % printed above "THESIS ADVISOR" (optional)
+\newcommand{\coverChair}{}                  % printed above "DEPARTMENT CHAIR" (optional)
+\newcommand{\coverAVPAA}{Jennifer Henderson, AVPAA}
+
+% Underlined fill-in field: \coverfield{width}{content}
+\newcommand{\coverfield}[2]{\underline{\makebox[#1]{#2}}}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\singlespacing
+\centering
+
+\vspace*{0.25in}
+{\large\MakeUppercase{\coverTitle}\par}
+\vspace{0.2in}
+{\coverAuthor\par}
+
+\vspace{1.0in}
+A DEPARTMENT HONORS THESIS SUBMITTED TO THE\par
+\vspace{0.15in}
+DEPARTMENT OF COMPUTER SCIENCE AT TRINITY UNIVERSITY\par
+\vspace{0.15in}
+IN PARTIAL FULFILLMENT OF THE REQUIREMENTS FOR GRADUATION WITH\\
+DEPARTMENTAL HONORS\par
+
+\vspace{1.0in}
+DATE\ \coverDate\par
+
+\vspace{1.3in}
+\noindent
+\begin{minipage}[t]{0.45\textwidth}
+  \raggedright
+  \coverfield{2.4in}{\coverAdvisor}\\[0.15in]
+  THESIS ADVISOR
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.45\textwidth}
+  \raggedleft
+  \coverfield{2.75in}{\coverChair}\\[0.15in]
+  \makebox[2.75in][l]{DEPARTMENT CHAIR}
+\end{minipage}
+
+\vspace{1.6in}
+\coverfield{3.2in}{}\\[0.15in]
+\coverAVPAA\par
+
+\end{titlepage}
+
+%%% Local Variables: ***
+%%% mode: latex ***
+%%% TeX-master: "thesis.tex" ***
+%%% End: ***
