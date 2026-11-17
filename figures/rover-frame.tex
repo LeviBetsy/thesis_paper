@@ -1,0 +1,81 @@
+% Body coordinate frame of the Cyclops rover.
+%
+% The rover is drawn schematically as a cylinder (the chassis) with a small
+% box and lens (the camera) mounted on its front face. The frame is
+% right-handed: origin at the bottom centre of the rover on the ground plane,
+% +y forward (toward the camera), +z up, and +x to the rover's right.
+% Colours follow the RGB convention: x red, y green, z blue.
+%
+% Pure vector TikZ -- solid fills and plain paths only. Do NOT introduce
+% opacity, shadings or fadings here: the Makefile builds via
+% latex -> dvips -> dvipdf, where those features are unreliable.
+%
+% View: orthographic-style projection from the front-right and above, set by
+% the x/y/z unit vectors below. With these vectors the projected rim of the
+% cylinder has vertical tangents at angles \silA and \silB (measured from +x
+% toward +y); the half of the rim between them faces the viewer.
+\begin{tikzpicture}[>=Latex, line join=round, font=\small,
+    x={(-1.12cm,-0.42cm)}, y={(0.99cm,-0.48cm)}, z={(0cm,1.38cm)}]
+
+  \def\chR{1.0}    % chassis radius
+  \def\chH{1.0}    % chassis height
+  \def\axL{1.1}    % length of each axis outside the chassis
+  \def\silA{-41.5} % silhouette angles of the projected rim
+  \def\silB{138.5}
+
+  \colorlet{xcol}{red!80!black}
+  \colorlet{ycol}{green!55!black}
+  \colorlet{zcol}{blue!80!black}
+
+  % ---- chassis --------------------------------------------------------
+  % side wall: front half of the bottom rim, up, back along the top rim
+  \filldraw[fill=black!20, draw=black!70]
+    plot[domain=\silA:\silB, samples=60, variable=\t]
+      ({\chR*cos(\t)}, {\chR*sin(\t)}, 0)
+    -- plot[domain=\silB:\silA, samples=60, variable=\t]
+      ({\chR*cos(\t)}, {\chR*sin(\t)}, \chH)
+    -- cycle;
+  % top face
+  \filldraw[fill=black!8, draw=black!70]
+    plot[domain=0:360, samples=90, variable=\t]
+      ({\chR*cos(\t)}, {\chR*sin(\t)}, \chH) -- cycle;
+  % hidden back half of the bottom rim
+  \draw[black!45, dashed]
+    plot[domain=\silB:318.5, samples=60, variable=\t]
+      ({\chR*cos(\t)}, {\chR*sin(\t)}, 0);
+
+  % ---- axes inside the chassis (hidden, dashed) -----------------------
+  \draw[xcol, dashed] (0,0,0) -- (\chR,0,0);
+  \draw[ycol, dashed] (0,0,0) -- (0,\chR,0);
+  \draw[zcol, dashed] (0,0,0) -- (0,0,\chH);
+  \fill (0,0,0) circle (1.5pt);
+  \node[anchor=south east, inner sep=2pt] at (0,0,0) {$O$};
+
+  % ---- camera on the front face ---------------------------------------
+  % top face (+z)
+  \filldraw[fill=black!45, draw=black]
+    (0.28,\chR-0.05,0.82) -- (0.28,\chR+0.2,0.82)
+    -- (-0.28,\chR+0.2,0.82) -- (-0.28,\chR-0.05,0.82) -- cycle;
+  % right-side face (+x)
+  \filldraw[fill=black!75, draw=black]
+    (0.28,\chR-0.05,0.5) -- (0.28,\chR+0.2,0.5)
+    -- (0.28,\chR+0.2,0.82) -- (0.28,\chR-0.05,0.82) -- cycle;
+  % front face (+y)
+  \filldraw[fill=black!60, draw=black]
+    (-0.28,\chR+0.2,0.5) -- (0.28,\chR+0.2,0.5)
+    -- (0.28,\chR+0.2,0.82) -- (-0.28,\chR+0.2,0.82) -- cycle;
+  % lens
+  \filldraw[fill=black!90, draw=black!30]
+    plot[domain=0:360, samples=40, variable=\t]
+      ({0.1*cos(\t)}, \chR+0.2, {0.66+0.1*sin(\t)}) -- cycle;
+  \node[anchor=west, xshift=2pt] at (-0.28,\chR+0.2,0.66) {camera};
+
+  % ---- axes outside the chassis ---------------------------------------
+  \draw[->, thick, xcol] (\chR,0,0) -- (\chR+\axL,0,0)
+    node[anchor=north east] {$x$};
+  \draw[->, thick, ycol] (0,\chR,0) -- (0,\chR+\axL,0)
+    node[anchor=north west] {$y$};
+  \draw[->, thick, zcol] (0,0,\chH) -- (0,0,\chH+\axL)
+    node[anchor=south] {$z$};
+
+\end{tikzpicture}

@@ -2,11 +2,11 @@
 %
 % Three paths:
 %   1. Perception: camera -> Pi -> SSH tunnel -> laptop MDE -> SSH tunnel
-%      back -> Pi range finder (range per bearing angle).
-%   2. Command: Pi velocity loop -> UART -> MSP432 PI controller -> PWM ->
+%      back (range per bearing angle) -> Pi navigation loop.
+%   2. Command: Pi navigation loop -> UART -> MSP432 PI controller -> PWM ->
 %      H-bridge -> motors.
 %   3. Feedback: encoders -> MSP432 encoder counter -> UART (left/right
-%      counts) -> Pi velocity loop.
+%      counts) -> Pi navigation loop.
 %
 % Convention: text above an arrow is the data carried, text below it is the
 % link it travels over. Software modules are white boxes inside a shaded box
@@ -34,28 +34,27 @@
   \draw[group] (-0.3,-0.75) rectangle (2.7,2.75);
   \node[title] at (1.2,2.7) {Laptop};
 
-  \draw[group] (3.9,-3.45) rectangle (6.9,2.75);
+  \draw[group] (3.9,-3.65) rectangle (6.9,2.75);
   \node[title] at (5.4,2.7) {Raspberry Pi};
 
-  \draw[group] (8.4,-3.45) rectangle (11.4,-0.75);
-  \node[title] at (9.9,-0.8) {MSP432};
+  \draw[group] (8.4,-3.65) rectangle (11.4,-0.35);
+  \node[title] at (9.9,-0.4) {MSP432};
 
   % ---- software modules ---------------------------------------------------
   \node[module, minimum height=2.2cm] (mde) at (1.2,0.9)
        {Monocular depth\\estimation\\(ViT)};
 
   \node[module] (cap) at (5.4,1.6)  {Frame capture};
-  \node[module] (rng) at (5.4,0.2)  {Range finder};
-  \node[module, minimum height=1.8cm] (vel) at (5.4,-2.2) {Velocity loop};
+  \node[module, minimum height=1.8cm] (vel) at (5.4,-2.2) {Navigation loop};
 
-  \node[module] (pid) at (9.9,-1.6) {PI speed\\controller};
-  \node[module] (cnt) at (9.9,-2.8) {Encoder\\counter};
+  \node[module] (pid) at (9.9,-1.4) {PI speed\\controller};
+  \node[module] (cnt) at (9.9,-3.0) {Encoder\\counter};
 
   % ---- physical hardware -------------------------------------------------
   \node[hw] (cam)  at (13.6,1.6)  {Camera};
-  \node[hw] (hb)   at (13.6,-1.6) {H-bridge};
-  \node[hw] (mot)  at (13.6,-2.8) {Motors\\(L, R)};
-  \node[hw] (encs) at (13.6,-4.0) {Encoders\\(L, R)};
+  \node[hw] (hb)   at (13.6,-1.4) {H-bridge};
+  \node[hw] (mot)  at (13.6,-3.0) {Motors\\(L, R)};
+  \node[hw] (encs) at (13.6,-4.3) {Encoders\\(L, R)};
 
   % ---- perception path ----------------------------------------------------
   \draw[flow] (cam.west) -- (cap.east)
@@ -63,9 +62,9 @@
   \draw[flow] (cap.west) -- (cap.west -| mde.east)
         node[lbl, midway, above] {frames}
         node[lbl, midway, below] {SSH};
-  \draw[flow] (rng.west -| mde.east) -- (rng.west)
-        node[lbl, midway, above] {range per\\angle}
-        node[lbl, midway, below] {SSH};
+  \draw[flow] (mde.south) |- (vel.west)
+        node[lbl, pos=0.75, above] {range per angle}
+        node[lbl, pos=0.75, below] {SSH};
 
   % ---- command path ------------------------------------------------------
   \draw[flow] (vel.east |- pid.west) -- (pid.west)
