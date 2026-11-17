@@ -168,130 +168,75 @@ laptop is reported in Chapter~\ref{ch:results}.
 
 \subsection{Relative versus Metric Depth}
 \label{sec:relative-depth}
-Most off-the-shelf MDE models do not output meters. They output relative depth: a
-dense map that is unitless, typically normalized to $[0,1]$ over the image, and correct in
-ordering rather than in measurement. Relative depth describes how far the scene point at a pixel is compared with the points at
-every other pixel in the image, whereas metric depth gives its absolute distance from the camera
-in physical units (e.g., $50$~cm).
 
-Relative depth is inversely related to metric depth: a higher relative depth value at a pixel
-indicates that the scene point at that pixel is closer to the camera and vice versa. 
-For example, a predicted relative depth value of $0.5$ asserts that the
-pixel is nearer than one predicted at $0.1$; in the real scene, the pixel could be $5$ cm away or $80$ cm away. 
-The raw relative depth value can not be directly used for robotics application. 
-Knowing which object is nearest is of little use to a motion planner that must decide whether there is enough
-clearance to pass between two of them or a gripper to accurately manipulate an object.
+Most off-the-shelf MDE models do not output meters. They output relative depth: a dense,
+unitless map that is correct in ordering rather than in measurement. Metric depth, by contrast,
+gives the absolute distance of each scene point from the camera in physical units (e.g.,
+$50$~cm). A relative depth map can say that one pixel is nearer than another, but not whether it
+is $5$~cm or $80$~cm away. That distinction matters to a motion planner deciding whether there is
+clearance to pass between two objects, or to a gripper that must reach one accurately.
 
+Models such as MiDaS and Depth Anything predict relative depth in the form of
+\emph{disparity}, which, as in stereo vision, is inversely related to depth: higher values
+indicate closer points~\cite{MiDaS}. We denote the predicted disparity at pixel $(u,v)$ by
+$\hat{d}(u,v)$ and the corresponding metric depth by $z(u,v)$.
 
-In this thesis, we denote
-the relative depth map by $D \in \mathbb{R}^{H \times W}$ and the model's estimate of it by
-$\hat{D}$, with entries $\hat{d}(u,v)$. Equation~\eqref{eq:inverse-depth} depicts the approximate
-inverse relationship between the estimated relative depth and the true metric depth at each pixel.
-This relationship holds only up to an unknown scale and shift, which we make precise in
-Equation~\eqref{eq:affine-disparity} of Section~\ref{sec:alignment}.
-\begin{equation}
-  \hat{d}(u,v) \;\approx\; \frac{1}{z(u,v)}
-  \label{eq:inverse-depth}
-\end{equation}
-Relative depth mirrors stereo vision, where the disparity between two matched pixels is inversely
-proportional to depth. Thus, relative depth may also be referred to as disparity
-in some sources~\cite{MiDaS}.
-
-
-The first reason models output relative depth is geometric, and is not a deficiency that better training could
-remove. Figure~\ref{fig:scale-ambiguity} illustrates this directly: 
-an object of size $s$ at distance $z$ and an object
-of size $2s$ at distance $2z$ fill the same cone of light rays to the camera, and
-therefore produce pixel-for-pixel identical images (figure on the right). Any MDE model will
-assign both images the same output as they are identical. 
-Thus why MDE is an ill-posed problem and MDE models have to output depth, it is not possible 
-to get metric depth from an image alone.
-Recovering metric depth requires additional information, such as a known object
-size, a known camera mounting height, or a second calibrated view. Our approach uses a known camera
-mounting height and calibrated points on the ground plane which we further describe in Section~\ref{sec:metric-scale}.
+The main reason these models cannot output metric depth is geometric, not a deficiency that
+better training could remove. As Figure~\ref{fig:scale-ambiguity} shows, an object of size $s$ at
+distance $z$ and an object of size $2s$ at distance $2z$ produce identical images, so no model can
+distinguish them. Absolute scale cannot be recovered from a single image alone; it requires
+additional information, such as a known object size, a known camera mounting height, or a second
+calibrated view. Our approach uses the known mounting height of the camera and calibrated points
+on the ground plane (Section~\ref{sec:metric-scale}).
 
 \begin{figure}[htbp]
   \centering
   \input{figures/scale-ambiguity}
   \caption[Scale ambiguity in monocular depth estimation]{Scale ambiguity in monocular depth
     estimation. An object of size $s$ at distance $z$ and an object of size $2s$ at distance $2z$
-    both produce the identical
-    image $I$.}
+    both produce the identical image $I$.}
   \label{fig:scale-ambiguity}
 \end{figure}
 
-
-The second reason MDE models output relative depth is a consequence of how modern zero-shot
-models are trained. Learned models, and Vision Transformers in particular, require large amounts
-of training data (on the order of tens of millions of images) to be accurate~\cite{ViT,DepthAnythingV2}.
-To assemble a dataset of this size, and to ensure that the model generalizes across many types
-of scenes rather than overfitting to a single dataset, models such as MiDas and Depth
-Anything are trained on a mixture of different sources. These sources include LiDAR-supervised data, RGB-D
-indoor captures, stereo photographs scraped from the web, structure-from-motion reconstructions,
-and frames extracted from 3D films~\cite{MiDaS,DPT}. These sources disagree about camera
-intrinsics, or raw stereo data might have an camera calibration. Thus depths drawn from different datasets cannot be placed on a
-common axis. The solution is to train the model to predict relative depth, which can be aligned to
-the scale and shift of each source individually; we describe this alignment in
-Section~\ref{sec:alignment}.
-
-We acknowledge that several recent models are trained to predict metric depth
-directly~\cite{DepthAnythingV2,MoGe}. However, as Figure~\ref{fig:scale-ambiguity} illustrates, a
-single image does not contain the information needed to determine absolute scale. A metric model
-must therefore infer scale from cues learned from its training data, such as the typical sizes of
-objects and the typical height and viewpoint of the camera. The metric variants of DAv2, for
-example, are fine-tuned on the synthetic Hypersim dataset~\cite{hypersim} for indoor scenes and on
-Virtual KITTI 2~\cite{virtualkitti2}, which replicates driving sequences recorded from a car-mounted camera,
-for outdoor scenes~\cite{DepthAnythingV2}. When the deployment setting departs from the training
-data, as it does for a camera mounted close to the floor on a small rover, these learned cues no
-longer hold and the predicted scale becomes unreliable. In our preliminary trials, off-the-shelf
-metric DAv2 were noticeably less accurate on the Cyclops rover \red{(around 20cm error at 40cm)} 
-and incurred roughly $100$~ms of
-additional inference latency. For these reasons, we use a relative depth model
-and recover metric scale from the known geometry of the rover itself
-(Section~\ref{sec:metric-scale}). A formal comparison between metric depth models and our approach
-is left to future work.
-
+Several recent models do predict metric depth directly~\cite{DepthAnythingV2,MoGe}, but they
+work around the ambiguity by learning scale cues from their training data, such as typical object
+sizes and camera viewpoints. The metric variants of DAv2, for example, are fine-tuned on the
+synthetic indoor dataset Hypersim~\cite{hypersim} and on Virtual KITTI 2~\cite{virtualkitti2},
+which uses a car-mounted camera~\cite{DepthAnythingV2}. A camera mounted close to the floor on a
+small rover departs from both, and in our preliminary trials the metric DAv2 models were
+noticeably less accurate on the Cyclops rover (errors of about $20$~cm, for obstacles $40$~cm away) and added
+roughly $100$~ms of inference latency. We therefore use a relative depth model and recover metric
+scale from the rover's own geometry. A formal comparison is left to future work.
 \subsection{Affine-Invariant Disparity Output}
 \label{sec:alignment}
-
-\red{Overexplaining? The formula is known do we need to restate it?}
-
-To convert the output of a relative depth model into metric distance, we must make the
-approximation in Equation~\eqref{eq:inverse-depth} precise, that is, specify exactly how
-$\hat{z}(u,v)$ is obtained from $\hat{d}(u,v)$. This relationship is set by how the model was trained,
-and in particular by how its loss function compares predictions to ground truth. 
-
-As noted in Section~\ref{sec:relative-depth}, the datasets used to train zero-shot MDE
-models do not share a common scale or shift. A LiDAR dataset supplies metric depth directly,
-whereas a stereo dataset supplies only disparity, which can be converted to metric depth only with a
-focal length and stereo baseline that are often unknown for web-scraped stereo images and 3D films.
-Ranftl et al.~\cite{MiDaS} resolved this mismatched dataset problem by aligning each prediction to its ground
-truth before computing the loss. For every training image, the scale $a$ and shift $b$ that best
-fit the predicted disparity to the ground truth are solved in closed form, and only the error
-remaining after this \emph{alignment} is penalized. The network is thus judged on the structure of the
-scene rather than on the arbitrary scale and shift of each dataset. Depth Anything V2 is trained
-with the same affine-invariant approach~\cite{DepthAnythingV2}.
-
-Because $a$ and $b$ are fitted away before the loss is computed, the network is never taught
-their values, and its output is correct only up to an unknown affine transform in disparity
-space. Equation~\eqref{eq:affine-disparity} depicts this relationship between the model's output
-$\hat{d}(u,v)$ and the estimated metric depth $\hat{z}(u,v)$ at each pixel.
+To convert relative depth into metric depth, we need the exact relationship between
+$\hat{d}(u,v)$ and $z(u,v)$, which is set by how the model is trained. Zero-shot MDE models
+require tens of millions of training images~\cite{ViT,DepthAnythingV2}, so they are trained on a
+mixture of sources: LiDAR scans, indoor RGB-D captures, web stereo photographs,
+structure-from-motion reconstructions, and frames from 3D films~\cite{MiDaS,DPT}. These sources do
+not share a common scale or shift. Stereo photographs and films, for instance, provide disparity
+without the focal length and baseline needed to convert it to meters. Ranftl et
+al.~\cite{MiDaS} resolved this by solving, for each training image, the scale $a$ and shift $b$
+that best fit the prediction to the ground truth, and penalizing only the error that remains.
+Depth Anything V2 is trained the same way~\cite{DepthAnythingV2}. Because $a$ and $b$ are fitted
+away during training, the network never learns their values, and its output is correct only up to
+an unknown affine transform in disparity space:
 \begin{equation}
   \frac{1}{\hat{z}(u,v)} \;=\; a\,\hat{d}(u,v) + b
   \label{eq:affine-disparity}
 \end{equation}
 
-Equation~\eqref{eq:affine-disparity} has two consequences for this work. First, recovering metric
-depth reduces to recovering just two scalars, $a$ and $b$, since the network already supplies
-the per-pixel structure of the scene. Second, because $a$ and $b$ were fitted separately for every
-training image, nothing constrains them to stay constant from one image to the next, so a
-one-time calibration is not guaranteed to remain valid as the scene changes. The Cyclops rover
-therefore re-estimates $a$ and $b$ on every frame, using ground-plane pixels whose metric depth is
-known from the camera's mounting geometry, as described in Section~\ref{sec:metric-scale}.
+This has two consequences for our work. First, recovering metric depth reduces to estimating two
+scalars, since the network already supplies the per-pixel structure of the scene. Second, because
+$a$ and $b$ were fitted separately for every training image, nothing keeps them constant from one
+frame to the next, so a one-time calibration is not enough. The Cyclops rover therefore
+re-estimates $a$ and $b$ on every frame from ground-plane pixels whose metric depth is known from
+the camera's mounting geometry (Section~\ref{sec:metric-scale}).
 
 
 \subsection{Recovering Metric Scale}
 \label{sec:metric-scale}
+
 To estimate $a$ and $b$ in Equation~\eqref{eq:affine-disparity}, we exploit the mounting
 geometry of the camera. The Cyclops rover drives on a flat floor, and its camera is rigidly
 mounted to the front of the chassis (Figure~\ref{fig:cyclops-rover}), so the height and tilt of
@@ -340,7 +285,7 @@ that discourages large values of the scale.
   \label{eq:ridge-fit}
 \end{equation}
 The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affine-disparity} to
-convert the relative disparity $\hat{d}(u,v)$ at every pixel into metric depth $\hat{z}(u,v)$.
+convert the relative disparity $\hat{d}(u,v)$ at every pixel into inverse metric depth $1/\hat{z}(u,v)$.
 
 
 We over sampled the points but it was also good for obstacle and to confirm that
@@ -382,19 +327,7 @@ back-projection:
 Equation~\eqref{eq:backprojection} is the mechanism by which Section~\ref{sec:mde-to-range}
 converts a depth map into the geometry of a range scan.
 
-Equation~\eqref{eq:projection} also makes the ill-posedness described above precise. Consider
-scaling the entire scene about the optical center by a factor $s > 0$, so that every scene point
-$(X, Y, Z)$ is mapped to $(sX, sY, sZ)$. The projected coordinates become
-\begin{equation}
-  u' = f_x \frac{sX}{sz} + c_x = u,
-  \qquad
-  v' = f_y \frac{sY}{sz} + c_y = v,
-  \label{eq:scale-ambiguity}
-\end{equation}
-which are unchanged, while every depth has been multiplied by $s$. The image is therefore
-\emph{invariant} to a uniform rescaling of the scene, even though the depth map is not. No
-function of $I$ alone, however expressive, can distinguish these cases; absolute scale is not
-merely difficult to estimate from a single image, it is not present in the image at all.
+red{Figure sth hows a sample of the point cloud}
 
 \subsection{Ground-Plane and Ceiling Deletion}
 
@@ -410,6 +343,8 @@ range and the encoding of invalid or no-return beams.}
 and bearing, including the heavy tail produced by depth-boundary bleed at object silhouettes.
 This distribution is the input to the beam model $p(z_t \mid x_t, m)$ in
 Chapter~\ref{ch:localization}.}
+
+\subsection{Entire MDE diagram}
 
 %%% Local Variables: ***
 %%% mode: latex ***
