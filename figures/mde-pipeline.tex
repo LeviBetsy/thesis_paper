@@ -1,0 +1,83 @@
+% End-to-end MDE pipeline of the Cyclops rover, from camera frame to range scan.
+%
+% Top row (left to right):    Pi frame capture -> SSH -> Depth Anything V2
+%                             -> depth calibration -> back-projection to 3D.
+% Bottom row (right to left): ground-plane deletion -> 1D range scan
+%                             -> SSH -> Pi navigation loop.
+%
+% Convention (same as data-flow.tex): text above an arrow is the data carried,
+% text below it is the link it travels over.
+%
+% The two dashed squares are image PLACEHOLDERS. To fill one, replace its
+% \placeholderimg{...} with e.g. \includegraphics[width=2.2cm]{figures/xyz}.
+%
+% Pure vector TikZ -- solid fills and plain paths only (no opacity, shadings
+% or fadings), so it also survives the latex -> dvipdf build.
+\providecommand{\placeholderimg}[1]{%
+  \tikz\draw[black!50, dashed] (0,0) rectangle (2.2,2.2)
+    node[midway, align=center, text=black!50, font=\scriptsize] {#1};}
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize,
+    module/.style={draw=black!75, fill=white, rounded corners=2pt,
+                   text width=2.2cm, align=center, minimum height=0.8cm},
+    imgmodule/.style={draw=black!75, fill=white, rounded corners=2pt,
+                   text width=2.4cm, align=center, inner ysep=4pt},
+    imgcap/.style={font=\scriptsize\itshape, text width=2.4cm, align=center},
+    group/.style={draw=black!50, fill=black!4, rounded corners=4pt},
+    title/.style={font=\footnotesize\bfseries, anchor=north},
+    flow/.style={->, black!80, line width=0.6pt},
+    lbl/.style={align=center, inner sep=1.5pt, font=\scriptsize},
+  ]
+
+  % ---- computers (drawn first, so modules sit on top) -------------------
+  \draw[group] (-0.3,-4.9) rectangle (2.3,3.2);
+  \node[title] at (1.0,3.15) {Raspberry Pi};
+
+  \draw[group] (3.7,-4.9) rectangle (14.0,3.2);
+  \node[title] at (8.85,3.15) {Laptop};
+
+  % ---- Pi modules -----------------------------------------------------------
+  \node[module] (cap) at (1.0,0.6)  {Frame capture};
+  \node[module] (nav) at (1.0,-3.9) {Navigation loop};
+
+  % ---- top row: laptop --------------------------------------------------------
+  \node[module, minimum height=1.2cm] (dav2) at (5.0,0.6)
+       {Depth Anything V2\\(ViT-S, frozen)};
+
+  \node[imgmodule] (cal) at (8.45,0.6)
+       {Depth calibration\\[3pt]
+        \placeholderimg{ground-point\\image}\\[2pt]
+        {\scriptsize\itshape Ground points fit\\$a^{*}, b^{*}$ per frame}};
+
+  \node[imgmodule] (pc) at (12.3,0.6)
+       {Back-projection\\[3pt]
+        \placeholderimg{point cloud\\image}\\[2pt]
+        {\scriptsize\itshape 3D point cloud\\in camera frame}};
+
+  % ---- bottom row: laptop -----------------------------------------------------
+  \node[module, minimum height=1.0cm] (del) at (12.3,-3.9)
+       {Ground-plane\\deletion};
+  \node[module, minimum height=1.0cm] (scan) at (8.45,-3.9)
+       {Reduction to\\1D range scan};
+
+  % ---- data flow --------------------------------------------------------------
+  \draw[flow] (cap.east) -- (dav2.west)
+    node[lbl, midway, above] {RGB\\frame $I$}
+    node[lbl, midway, below] {SSH};
+
+  \draw[flow] (dav2.east) -- (cal.west |- dav2.east)
+    node[lbl, midway, above] {$\hat{d}(u,v)$};
+
+  \draw[flow] (cal.east) -- (pc.west)
+    node[lbl, midway, above] {$\hat{z}(u,v)$};
+
+  \draw[flow] (pc.south) -- (del.north)
+    node[lbl, midway, right] {$(X,Y,Z)$};
+
+  \draw[flow] (del.west) -- (scan.east)
+    node[lbl, midway, above] {obstacle\\points};
+
+  \draw[flow] (scan.west) -- (nav.east)
+    node[lbl, pos=0.62, above] {$R_0, \dots, R_{n-1}$}
+    node[lbl, pos=0.62, below] {SSH};
+
+\end{tikzpicture}

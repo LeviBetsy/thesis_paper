@@ -1,27 +1,121 @@
 \chapter{Localization}
 \label{ch:localization}
+What localization is
 \red{diagram of whole architecture}
+\section{Testing Environment}
 \section{Monte Carlo Localization}
-Why we chose an occupancy grid and not a feature-based map
-Why MCL and not EKF, UKF
+\label{sec:mcl}
 
-Not reproducing the book, but maybe a pseudo code section
+Monte Carlo localization (MCL) is a particle filter approach to localization that has
+become one of the most popular localization algorithms in robotics~\cite{thrun2005probabilistic}.
+It is easy to implement and works well across a wide range of localization problems. The
+goal of localization is to estimate the rover's pose $x_t = (x, y, \theta)^\top$ in a known
+map $m$, given every control $u_{1:t}$ and measurement $z_{1:t}$ received up to time $t$.
+Equation~\ref{eq:belief} defines this estimate, called the belief, as a probability
+distribution over all possible poses.
+\begin{equation}
+  \label{eq:belief}
+  \mathrm{bel}(x_t) = p(x_t \mid z_{1:t}, u_{1:t}, m)
+\end{equation}
 
-A higher level but not complete image of it
+MCL does not store the belief as a closed-form distribution. Instead, it keeps a set of $M$
+samples, called particles, where each particle is one guess of the rover's pose.
+Equation~\ref{eq:particle-set} shows the particle set at time $t$.
+\begin{equation}
+  \label{eq:particle-set}
+  \mathcal{X}_t = \left\{ x_t^{[1]}, x_t^{[2]}, \dots, x_t^{[M]} \right\}
+\end{equation}
+Areas of the map that hold many particles are areas where the rover is likely to be, and
+areas that hold few particles are areas where it is unlikely to be.
 
-Present the math but not explain it
+MCL was chosen over Gaussian filters such as the extended Kalman filter (EKF) and the
+unscented Kalman filter (UKF) for several reasons~\cite{thrun2005probabilistic}. First, the
+EKF and UKF represent the belief as a single Gaussian, so they can only track one pose
+hypothesis at a time. They cannot solve global localization, where the starting pose is
+unknown, and they cannot recover once the estimate has diverged. A particle set can hold
+several hypotheses at once in different parts of the map. Second, the EKF linearizes the
+motion and measurement models. The UKF avoids linearization but still assumes Gaussian
+noise. MCL places no such restriction on either model. Third, EKF localization usually works
+on a small set of extracted landmarks and must decide which landmark each measurement
+belongs to. MCL can score raw range measurements directly against the map, which suits the
+Cyclops rover, whose measurement is a dense range scan obtained from monocular depth
+(Section~\ref{sec:mde-to-range}). Finally, the cost of MCL grows linearly with the number of
+particles $M$, so it can be tuned to fit the computational budget of the rover.
 
-Don't justify the derivation of the filter, just what it is
+Algorithm~\ref{alg:mcl} lists the MCL procedure, adapted from~\cite{thrun2005probabilistic}.
+The particle index is written as $k$ instead of $m$ so that it is not confused with the
+map $m$.
 
-The 1,2,3,4,5 steps and how we implement it.
+\begin{algorithm}[htbp]
+  \caption{Monte Carlo Localization, adapted from~\cite{thrun2005probabilistic}}
+  \label{alg:mcl}
+  \begin{algorithmic}[1]
+    \Function{MCL}{$\mathcal{X}_{t-1}, u_t, z_t, m$}
+      \State $\bar{\mathcal{X}}_t \gets \emptyset$, \quad $\mathcal{X}_t \gets \emptyset$
+      \For{$k = 1$ \textbf{to} $M$}
+        \State $x_t^{[k]} \gets \Call{sample\_motion\_model}{u_t, x_{t-1}^{[k]}}$
+        \State $w_t^{[k]} \gets \Call{measurement\_model}{z_t, x_t^{[k]}, m}$
+        \State $\bar{\mathcal{X}}_t \gets \bar{\mathcal{X}}_t \cup \left\{ \langle x_t^{[k]}, w_t^{[k]} \rangle \right\}$
+      \EndFor
+      \For{$k = 1$ \textbf{to} $M$}
+        \State draw $i$ with probability $\propto w_t^{[i]}$
+        \State add $x_t^{[i]}$ to $\mathcal{X}_t$
+      \EndFor
+      \State \Return $\mathcal{X}_t$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
+
+Each call to Algorithm~\ref{alg:mcl} updates the belief from time $t-1$ to time $t$. The
+inputs are the previous particle set $\mathcal{X}_{t-1}$, the latest control $u_t$, the
+latest measurement $z_t$, and the map $m$. Line~2 creates two empty sets: a temporary set
+$\bar{\mathcal{X}}_t$ that holds weighted particles, and the output set $\mathcal{X}_t$. The
+rest of the algorithm runs in three steps.
+
+\textbf{Prediction (line 4).} Each particle is moved forward by drawing a new pose from the
+motion model, given the control $u_t$ and the particle's previous pose. Because the draw is
+random, particles that started at the same pose spread apart, which reflects the uncertainty
+in the rover's motion. The motion model used by the Cyclops rover is described in
+Section~\ref{sec:motion-model}.
+
+\textbf{Weighting (lines 5--6).} Each moved particle is given an importance weight
+$w_t^{[k]}$ by the measurement model. The weight is high when the measurement $z_t$ the rover
+actually received matches what it would expect to see from pose $x_t^{[k]}$ in the map $m$,
+and low otherwise. Line~6 stores the particle together with its weight in
+$\bar{\mathcal{X}}_t$. The measurement model used by the Cyclops rover is described in
+Section~\ref{sec:measurement-model}.
+
+\textbf{Resampling (lines 8--10).} A new set of $M$ particles is drawn with replacement from
+$\bar{\mathcal{X}}_t$. Equation~\ref{eq:resample-prob} gives the probability that particle
+$i$ is drawn on each draw, which is its weight normalized over all particles.
+\begin{equation}
+  \label{eq:resample-prob}
+  P(\text{draw } i) = \frac{w_t^{[i]}}{\sum_{j=1}^{M} w_t^{[j]}}
+\end{equation}
+Particles with high weight are likely to be drawn several times, while particles with low
+weight are likely to disappear. After resampling, the particles gather in the parts of the
+map that agree with the measurement.
+
+Line~12 returns $\mathcal{X}_t$, which represents the belief $\mathrm{bel}(x_t)$ and becomes
+the input to the next call. A single pose estimate for the rover is taken as
+the mean of the particle set \red{[confirm: mean vs.\ best particle vs.\ cluster mean]}.
+
+Algorithm~\ref{alg:mcl} itself is generic and does not depend on the robot or its sensors.
+What makes it specific to the Cyclops rover are the two models it calls:
+\textsc{sample\_motion\_model} and \textsc{measurement\_model}. The next two sections
+describe how each was built for the rover.
 
 \section{Cyclops Rover Motion Model}
+\label{sec:motion-model}
 What specifically did we do 
 \section{Cyclops Rover Measurement Model}
+\label{sec:measurement-model}
 Latency measured from laptop to be around 300ms
 
 \section{Pathplanning}
 \label{sec:navigation}
+
+\red{some screenshots of different screen, map screen, real life, camera view}
 
 %%% Local Variables: ***
 %%% mode: latex ***

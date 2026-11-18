@@ -33,27 +33,53 @@ uses to regulate motor speed.
 
 Figure~\ref{fig:cyclops-rover} shows the assembled Cyclops rover. The Raspberry Pi 5
  sit on top of the TI-RSLK chassis, the MSP432 LaunchPad is mounted
-on the chassis below it, and the USB camera is fixed to the front of the rover,
+on the chassis below it, and the USB camera is fixe d to the front of the rover,
 facing forward and titled down so that the near field in front of
 the rover is in view.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\textwidth]{figures/rover.png}
+  \begin{tikzpicture}
+    \node[anchor=south west, inner sep=0] (img)
+      {\includegraphics[width=\textwidth]{figures/rover.png}};
+    % Normalized coordinates: (0,0) = bottom-left, (1,1) = top-right of the whole image
+    \begin{scope}[x={(img.south east)}, y={(img.north west)},
+        lbl/.style={fill=white, draw, thick,
+          rounded corners=2pt, inner sep=2pt, font=\scriptsize\bfseries, anchor=west},
+        ann/.style={very thick}]
+      % TI-RSLK chassis
+      \draw[ann, red]    (0.225,0.356) ellipse (0.148 and 0.137);
+      \node[lbl, red, text=black]    (rslk) at (0.36,0.12) {TI-RSLK chassis};
+      \draw[ann, red]    (rslk.west) -- (0.353,0.288);
+      % Camera
+      \draw[ann, cyan]   (0.144,0.622) ellipse (0.039 and 0.097);
+      \node[lbl, cyan, text=black]   (cam) at (0.01,0.47) {Camera};
+      \draw[ann, cyan]   (cam.north) -- (0.115,0.565);
+      % Raspberry Pi 5
+      \draw[ann, green!70!black] (0.268,0.787) ellipse (0.089 and 0.072);
+      \node[lbl, green!70!black, text=black] (pi) at (0.01,0.93) {Raspberry Pi 5};
+      \draw[ann, green!70!black] (pi.south east) -- (0.200,0.820);
+      % Battery HAT
+      \draw[ann, orange] (0.250,0.682) ellipse (0.101 and 0.055);
+      \node[lbl, orange, text=black] (hat) at (0.40,0.66) {Pi 5 battery HAT};
+      \draw[ann, orange] (hat.west) -- (0.351,0.682);
+    \end{scope}
+  \end{tikzpicture}
   \caption[The Cyclops rover]{The Cyclops rover. \textbf{Left:} perspective view from the
     front. \textbf{Right:} top-down view, with the front of the rover at the top.}
   \label{fig:cyclops-rover}
 \end{figure}
 
 Figure~\ref{fig:rover-frame} shows the coordinate frame of the Cyclops rover. The
-origin is located at the bottom center of the rover, on the ground plane. The $y$-axis
+origin is located at the bottom center of the rover, on the ground plane
+ centered between the two wheels. The $y$-axis
 points forward, in the direction the camera faces; the $z$-axis points up; and the
 $x$-axis points to the rover's right.
 
 \begin{figure}[htbp]
   \centering
   \input{figures/rover-frame}
-  \caption[Body coordinate frame of the Cyclops rover]{Body coordinate frame of the
+  \caption[Robot coordinate frame of the Cyclops rover]{Body coordinate frame of the
     Cyclops rover, drawn with the chassis as a cylinder and the camera on its front
     face. The origin $O$ is at the bottom center of the rover. The $x$-axis (red) points
     to the rover's right, the $y$-axis (green) points forward, and the $z$-axis (blue)

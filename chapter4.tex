@@ -1,6 +1,10 @@
 \chapter{Monocular Depth Estimation}
 \label{ch:mde}
-\red{todo}
+
+This chapter describes how the Cyclops rover perceives obstacle distance from its single camera. It
+covers monocular depth estimation, the transformer-based model used to predict depth, the calibration
+of its output to metric scale, and the conversion of the resulting depth map into a range scan.
+
 \section{Introduction to Monocular Depth Estimation}
 Depth perception is the ability to determine the distance between a sensor and
 the surfaces in its surroundings. It is a crucial component of robotic
@@ -29,8 +33,8 @@ robotic platforms, such as the cyclops rover, because it removes the need for a
 dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
 and power draw.
 
-The use of a camera for depth perception make the constraint
-to the robot's environment: That it operate
+The use of MDE for depth perception make the first constraint
+to the robot's environment: It must operate
 in a well lit area
 
 
@@ -38,15 +42,15 @@ Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ a
 and let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth map. An entry $z(u,v)$ 
 is the distance (in meters) along the camera's primary axis of the scene point captured by the image
 at pixel $(u,v)$. Figure~\ref{fig:depth-definition} is a visual representation of this definition.
-In the visualization, all points on the wall that is displayed in the captured image would have the
-same metric depth. \red{consider having a 3d visualizaiton instead to capture real life}
 
 \begin{figure}[htbp]
   \centering
   \input{figures/depth-definition}
-  \caption[Definition of depth in a depth map]{Definition of depth in a depth map, shown from
-    above. The scene point $P$ is imaged at pixel $(u,v)$. Its depth $z(u,v)$ is the distance from
-    the camera measured along the optical axis not the Euclidean distance from the camera to $P$.}
+  \caption[Definition of depth in a depth map]{Definition of depth in a depth map. The scene point
+    $P$, on the floor below and to the side of the camera, is imaged at pixel $(u,v)$. Projecting
+    $P$ orthogonally onto the optical axis (dotted lines within the plane of constant depth) gives
+    its depth $z(u,v)$: the distance from the camera to that projection along the optical axis, not
+    the Euclidean distance from the camera to $P$.}
   \label{fig:depth-definition}
 \end{figure}
 
@@ -74,17 +78,15 @@ without modification or fine-tuning of the underlying architecture.
 
 
 \subsection{Transformers for Dense Prediction}
-Early learned MDE model~\cite{MiDaS,Eigen}, used convolutional
+Early learned MDE models~\cite{MiDaS,Eigen} used convolutional
 neural network (CNN) encoder--decoder architectures, in which a convolutional backbone extracts
 image features and a decoder upsamples them into a dense depth map. The Vision Transformer
 (ViT)~\cite{ViT} later adapted the transformer architecture, originally developed for natural
 language processing~\cite{Transformer}, to images by treating an image as a sequence of
 fixed-size patches. Ranftl et al.\ replaced the convolutional encoder of MiDaS with a ViT in the
-Dense Prediction Transformer (DPT), improving zero-shot depth estimation accuracy by up to $28\%$
-in relative performance over a state-of-the-art fully convolutional network~\cite{DPT}.
-ViT-based encoders have since become the foundation of most state-of-the-art MDE models,
-including Depth Anything V2~\cite{DepthAnythingV2}, which pairs a DINOv2 ViT encoder with a
-DPT decoder.
+Dense Prediction Transformer (DPT), substantially improving zero-shot depth estimation accuracy
+over fully convolutional networks~\cite{DPT}. ViT-based encoders have since become the foundation
+of most state-of-the-art MDE models, including Depth Anything V2~\cite{DepthAnythingV2}.
 
 The advantage of the ViT stems from a difference in \emph{inductive bias}, the assumptions an
 architecture builds in about the structure of its input. A convolution applies a small kernel to
@@ -94,13 +96,10 @@ of the input influencing a feature) covers the scene. Through self-attention, a 
 every patch attend to every other patch, giving global context from the first layer~\cite{ViT}.
 This matters for MDE because depth cues are rarely local: judging the distance to an obstacle
 depends on where it meets the ground plane, the perspective lines converging toward the horizon,
-and its size relative to other objects, all of which may be spread across the image.
-
-The CNN's path to global context also carries a cost. As Ranftl et al.\ note, progressive
-downsampling loses feature resolution and granularity in the deeper stages, and this detail is
-difficult to recover in the decoder, which is a poor fit for dense, per-pixel tasks such as
-MDE~\cite{DPT}. A ViT instead maintains a constant feature resolution throughout the encoder, so
-global context is available without sacrificing spatial detail at successive stages~\cite{DPT}.
+and its size relative to other objects, all of which may be spread across the image. A ViT also
+keeps a constant feature resolution throughout the encoder, avoiding the loss of fine spatial
+detail that a CNN's progressive downsampling causes, which matters for a dense, per-pixel task such
+as MDE~\cite{DPT}.
 
 
 
@@ -108,19 +107,20 @@ global context is available without sacrificing spatial detail at successive sta
 \subsection{Depth Anything V2}
 \label{sec:DAV2}
 Depth Anything V2~\cite{DepthAnythingV2} is the depth estimation model deployed on the Cyclops
-rover. Architecturally, it is a direct instance of the encoder--decoder design described above: a
-DINOv2~\cite{DINOv2} ViT encoder followed by a DPT~\cite{DPT} decoder. The input image is resized to
-$518 \times 518$ pixels and divided into $14 \times 14$ patches, giving a $37 \times 37$ grid of
-patch tokens that the encoder processes with self-attention. Rather than using only the final
-encoder layer, DAv2 takes features from four intermediate layers of the encoder. The DPT decoder
-\emph{reassembles} each set of tokens back into an image-like feature map at a different
-resolution, \emph{fuses} these maps from coarse to fine, and a small convolutional head upsamples
-the result into a dense relative depth map $\hat{D}$ at the input resolution.
-A full treatment of the encoder and decoder is beyond the scope of this
-thesis; we refer the reader to Oquab et al.~\cite{DINOv2} for DINOv2 and
-Ranftl et al.~\cite{DPT} for the DPT decoder.
-Figure~\ref{fig:dav2-architecture} summarizes this pipeline. In this work, the network is used
-exactly as released: its weights are frozen and no layer is modified or fine-tuned.
+rover. We chose it because it generalizes well zero-shot, so it can be deployed without
+fine-tuning, and because it is more than $10\times$ faster than recent diffusion-based estimators
+built on Stable Diffusion~\cite{DepthAnythingV2}. DAv2 is released in several sizes, and on
+standard benchmarks such as NYU-D~\cite{NYUD} the smallest is only slightly less accurate than the
+largest despite having $13\times$ fewer parameters~\cite{DepthAnythingV2}. The Cyclops rover
+therefore runs DAv2-Small, which has $24.8$M parameters and is also the only variant released under
+the permissive Apache-2.0 license~\cite{dav2github}.
+
+Architecturally, DAv2 is a direct instance of the encoder--decoder design described above: a
+DINOv2~\cite{DINOv2} ViT encoder followed by a DPT~\cite{DPT} decoder that combines features from
+several encoder layers into a dense relative disparity map $\hat{d}$
+(Section~\ref{sec:relative-depth}) at the input resolution. Figure~\ref{fig:dav2-architecture}
+summarizes this pipeline; we refer the reader to Oquab et al.~\cite{DINOv2} and Ranftl
+et al.~\cite{DPT} for a full treatment of the encoder and decoder.
 
 \begin{figure}[htbp]
   \centering
@@ -129,8 +129,8 @@ exactly as released: its weights are frozen and no layer is modified or fine-tun
     encoder deployed on the Cyclops rover. The image is split into $14 \times 14$ patches and
     processed by a DINOv2 ViT encoder. Features from four intermediate layers are reassembled
     into feature maps at $\tfrac{1}{4}$ to $\tfrac{1}{32}$ of the input resolution, fused from
-    coarse to fine by the DPT decoder, and upsampled by the head into a dense relative depth map
-    $\hat{D}$. All weights are used frozen, as released.}
+    coarse to fine by the DPT decoder, and upsampled by the head into a dense relative disparity
+    map $\hat{d}$. All weights are used frozen, as released.}
   \label{fig:dav2-architecture}
 \end{figure}
 
@@ -142,21 +142,9 @@ values, the model learns to predict sharp depth discontinuities at obstacle edge
 sharp edges in the range scan derived in Section~\ref{sec:mde-to-range}. Second, the teacher
 labels roughly $62$ million unlabeled real images, and the released models are trained on these
 pseudo-labels. Exposure to this large and varied set of real scenes is what allows the model to
-generalize zero-shot to our indoor environment, so it can be deployed without fine-tuning.
+generalize zero-shot to our indoor environment.
 
-We use Depth Anything V2 (DAv2)~\cite{DepthAnythingV2} as the depth estimator. It is a recent
-model that generalizes well zero-shot, so it can be deployed on the rover without fine-tuning,
-and it is more than $10\times$ faster than recent diffusion-based estimators built on Stable
-Diffusion~\cite{DepthAnythingV2}. DAv2 is released in several sizes. On standard benchmarks such as
-NYU-D~\cite{NYUD}, the smallest variant is only slightly less accurate than the largest, despite
-having $13\times$ fewer parameters~\cite{DepthAnythingV2}.
-
-The Cyclops rover therefore runs DAv2-Small, the variant with the ViT-S encoder
-(Figure~\ref{fig:dav2-architecture}), at $24.8$M parameters. It is also the only variant released
-under the permissive Apache-2.0 license; the Base and Large models are restricted to
-non-commercial use under CC-BY-NC-4.0~\cite{dav2github}. 
-
-Even at this size, DAv2-Small runs too slowly on the rover's onboard Raspberry Pi to support
+Even DAv2-Small runs too slowly on the rover's onboard Raspberry Pi to support
 real-time navigation. Depth inference is therefore offloaded to a laptop: the rover streams each
 camera frame to the laptop, which runs DAv2-Small and returns the resulting depth map.
 The measured inference latency on the
@@ -179,7 +167,7 @@ clearance to pass between two objects, or to a gripper that must reach one accur
 Models such as MiDaS and Depth Anything predict relative depth in the form of
 \emph{disparity}, which, as in stereo vision, is inversely related to depth: higher values
 indicate closer points~\cite{MiDaS}. We denote the predicted disparity at pixel $(u,v)$ by
-$\hat{d}(u,v)$ and the corresponding metric depth by $z(u,v)$.
+$\hat{d}(u,v)$ and the corresponding predicted metric depth by $\hat{z}(u,v)$.
 
 The main reason these models cannot output metric depth is geometric, not a deficiency that
 better training could remove. As Figure~\ref{fig:scale-ambiguity} shows, an object of size $s$ at
@@ -272,7 +260,7 @@ that MDE predicts.
   \label{fig:ground-points}
 \end{figure}
 
-\red{Do I have to justify }
+
 With the ground points fixed, the alignment parameters are recalculated on every frame. For a new image,
 let $\hat{d}^{\mathrm{g}}_k = \hat{d}(u_k, v_k)$ denote the model's relative disparity at the $k$-th ground
 point. By Equation~\eqref{eq:affine-disparity}, the known depths should satisfy
@@ -288,34 +276,75 @@ The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affi
 convert the relative disparity $\hat{d}(u,v)$ at every pixel into inverse metric depth $1/\hat{z}(u,v)$.
 
 
-We over sampled the points but it was also good for obstacle and to confirm that
-the output was truly linear.
+To verify that Equation~\eqref{eq:affine-disparity} holds for the Cyclops rover, we fit all
+$N = 96$ ground points, spanning $16$ rows from nearest to farthest. Figure~\ref{fig:disparity-fit}
+plots the inverse metric depth $1/z^{\mathrm{g}}_k$ of each ground point against the model's
+relative disparity $\hat{d}^{\mathrm{g}}_k$, together with the fitted line
+$a^{*}\hat{d} + b^{*}$. The points lie close to a single line across all $16$ rows
+($R^2 = \red{[VALUE]}$), confirming that the model's output is affine in disparity over the range
+of depths covered by the ground points.
 
-During devlopment we only needed to do two rows and did a relative depth
-that is smaller than the closer row (obstacle )
+\begin{figure}[htbp]
+  \centering
+  % TODO: replace with \includegraphics[width=0.7\textwidth]{figures/<disparity-fit>}
+  \fbox{\parbox[c][6cm][c]{0.65\textwidth}{\centering
+    \red{[PLACEHOLDER]\\Scatter plot for one frame:\\
+    x-axis: relative disparity $\hat{d}^{\mathrm{g}}_k$\\
+    y-axis: inverse metric depth $1/z^{\mathrm{g}}_k$ (m$^{-1}$)\\
+    all $96$ ground points, colored by row ($1$--$16$)\\
+    overlaid fitted line $a^{*}\hat{d} + b^{*}$}}}
+  \caption[Affine fit of disparity to inverse metric depth]{Known inverse metric depth
+    $1/z^{\mathrm{g}}_k$ versus the relative disparity $\hat{d}^{\mathrm{g}}_k$ predicted by Depth
+    Anything V2 for all $96$ ground points in a single frame, colored by row. The line
+    is the fit of Equation~\eqref{eq:ridge-fit}. The near-linear relationship across all $16$ rows
+    confirms the affine model of Equation~\eqref{eq:affine-disparity}.}
+  \label{fig:disparity-fit}
+\end{figure}
 
 
 
+In practice, only the nearest two rows are used to calculate $a^{*}$ and $b^{*}$
+Because an obstacle can cover some of the ground points, any ground point that does not lie on
+the floor must be removed before fitting. Let $\hat{d}^{\mathrm{near}}_j$ and
+$\hat{d}^{\mathrm{far}}_j$ denote the relative disparities of the ground points in column $j$ of
+the nearest row and of the row directly behind it, respectively. On a flat floor, the far-row point
+is farther from the camera than the near-row point and must therefore have a smaller disparity.
+Equation~\eqref{eq:ground-check} depicts the condition a far-row point must satisfy to be kept.
+\begin{equation}
+  \hat{d}^{\mathrm{far}}_j \;<\; \hat{d}^{\mathrm{near}}_j
+  \label{eq:ground-check}
+\end{equation}
+A far-row point that violates Equation~\eqref{eq:ground-check} is at least as close as the floor in
+front of it. This means it images a surface rising out of the ground plane, so it is discarded as
+an obstacle. The robot is never allowed to drive close
+enough to an obstacle for the obstacle to reach the far row, which reserves a strip of clear floor
+directly in front of the rover for ground calibration. If no far-row point survives,
+ the fit is skipped and the MDE does not return any depth.
 
 
 \section{Monocular Depth to Range Finder}
-diagram of image to mde to laptop etc
-that we foudn too slow on embedded hardware with no GPU thus moving to laptop
+
 \label{sec:mde-to-range}
 
 
 \subsection{Back-Projection to 3D}
 
- A scene
-point $(X, Y, Z)$ expressed in the camera frame projects to
+The conversion from depth map to 3D points follows the pinhole camera model as described by
+\red{[COMPUTER VISION BOOK AUTHOR]}~\red{[]}, using the intrinsics $f_x$, $f_y$, $c_x$, and $c_y$ calibrated in
+Section~\ref{sec:camera} (Equation~\eqref{eq:intrinsics}). Equation~\eqref{eq:projection} depicts
+the projection of a scene point $(X, Y, Z)$, expressed in the camera frame, onto the pixel $(u,v)$
+at which it appears in the image, where $z$ is the point's depth along the optical axis
+(Figure~\ref{fig:depth-definition}).
 \begin{equation}
   u = f_x \frac{X}{z} + c_x,
   \qquad
   v = f_y \frac{Y}{z} + c_y,
   \label{eq:projection}
 \end{equation}
-and, given a depth $z$ at pixel $(u,v)$, the corresponding scene point is recovered by
-back-projection:
+Inverting Equation~\eqref{eq:projection} recovers a scene point from its pixel whenever its depth
+is known. Equation~\eqref{eq:backprojection} depicts this back-projection, which recovers the
+scene point $(X, Y, Z)$ imaged at pixel $(u,v)$ from its metric depth $z = \hat{z}(u,v)$
+(Section~\ref{sec:metric-scale}).
 \begin{equation}
   X = \frac{(u - c_x)\, z}{f_x},
   \qquad
@@ -324,27 +353,106 @@ back-projection:
   Z = z .
   \label{eq:backprojection}
 \end{equation}
-Equation~\eqref{eq:backprojection} is the mechanism by which Section~\ref{sec:mde-to-range}
-converts a depth map into the geometry of a range scan.
+Applying Equation~\eqref{eq:backprojection} to every pixel of the metric depth map turns it into a
+3D point cloud, from which the rest of this section builds the range scan.
 
-red{Figure sth hows a sample of the point cloud}
+Figure~\ref{fig:point-cloud} shows a camera frame from the Cyclops rover alongside the point
+cloud back-projected from it, colored by depth $Z$\red{double check code, i am pretty sure it is colored by Z}
+. Along with the obstacles in front of the
+rover, the cloud contains every visible point on the floor, which is removed before the range
+scan is formed.
 
-\subsection{Ground-Plane and Ceiling Deletion}
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<rgb-frame>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\RGB frame $I$ from the rover's camera,\\showing floor and a few obstacles}}}
+    \caption{Camera frame $I$.}
+    \label{fig:point-cloud-rgb}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<point-cloud>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Point cloud from the same frame,\\colored by height $Y$, viewed from\\behind and above the rover}}}
+    \caption{Back-projected point cloud.}
+    \label{fig:point-cloud-3d}
+  \end{subfigure}
+  \caption[Back-projected point cloud]{A single camera frame and the 3D point cloud obtained by
+    applying Equation~\eqref{eq:backprojection} to every pixel of its metric depth map. Points are
+    colored by their height $Y$, so the floor appears as a single band of color beneath the
+    obstacles.}
+  \label{fig:point-cloud}
+\end{figure}
+
+\subsection{Ground-Plane Deletion}
+
+The back-projected point cloud includes the floor in front of the rover, which is not an obstacle
+and must be removed before the range scan is formed. Because the camera is mounted at a fixed
+height $h$ above the floor, this is done with a threshold on the vertical coordinate $Y$ of each
+point: points less than $2$~cm above the floor are classified as ground plane and discarded. The
+ceiling is not filtered, since our test area has a high ceiling and the rover's camera is tilted
+downward, placing the ceiling outside the camera's field of view.
 
 \subsection{Reduction to a 1D Angular Range Scan}
-\todo{The step that makes a camera behave like a range finder. The bearing of image column $u$ is
-$\theta(u) = \arctan\!\big((u - c_x)/f_x\big)$; partition the horizontal field of view into $K$
-angular bins matching the beam layout the measurement model of Chapter~\ref{ch:localization}
-expects, and take the minimum surviving obstacle range within each bin. Define the maximum usable
-range and the encoding of invalid or no-return beams.}
 
-\subsection{Noise Characterization}
-\todo{Characterize the error distribution of the resulting ranges as a function of true distance
-and bearing, including the heavy tail produced by depth-boundary bleed at object silhouettes.
-This distribution is the input to the beam model $p(z_t \mid x_t, m)$ in
-Chapter~\ref{ch:localization}.}
+\red{THIS SECTION IS BADLY WRITTEN. PLEASE IGNORE} Because the rover moves in the plane of the floor, the height of an obstacle does not matter for
+localization or navigation. Only its position on the floor does. The remaining points are therefore
+transformed into the robot frame and projected onto the floor plane by discarding their height.
+Each point $i$ then has a lateral coordinate $x_i$, which is positive to the rover's right, and a
+forward coordinate $y_i$. The scan is then formed by casting $n$ rays evenly across the camera's
+horizontal field of view $\phi_x$, so that each ray covers an angular width of $\Delta\theta = \phi_x / n$.
+Equation~\eqref{eq:bearing-range} depicts the bearing $\theta_i$ and range $r_i$ of each point,
+measured from the camera, which is mounted on the rover's centerline at a forward offset $t_y$.
+Measuring from the camera instead of the robot origin aligns the ray boundaries with the camera's
+true field of view.
+\begin{equation}
+  \theta_i = \operatorname{atan2}\!\left(x_i,\; y_i - t_y\right),
+  \qquad
+  r_i = \sqrt{x_i^{2} + (y_i - t_y)^{2}}
+  \label{eq:bearing-range}
+\end{equation}
+Equation~\eqref{eq:ray-scan} depicts how each point is assigned to ray $k_i$ and how the range
+$R_k$ reported by ray $k$ is computed, for $k = 0, \dots, n-1$.
+\begin{equation}
+  k_i = \left\lfloor \frac{\theta_i + \phi_x/2}{\Delta\theta} \right\rfloor,
+  \qquad
+  R_k = \min\!\Big( r_{\max},\; \min_{\{i \,:\, k_i = k\}} r_i \Big)
+  \label{eq:ray-scan}
+\end{equation}
+Each ray therefore reports the distance to the nearest obstacle within its angular width. We cap the
+range at $r_{\max}$ because MDE becomes unreliable at long distances. As a result, a ray with no
+point within $r_{\max}$ reports $r_{\max}$, which marks free space. The result is a 1D range scan of
+length $n$, the same form of observation a planar LiDAR produces. rmax is picked at 40cm for experiments.
 
-\subsection{Entire MDE diagram}
+\subsection{Entire MDE Pipeline}
+\label{sec:mde-pipeline}
+
+Figure~\ref{fig:mde-pipeline} depicts the complete pipeline that turns a single camera frame into
+a range scan. The Raspberry Pi captures an RGB frame $I$ and sends it to the laptop over an SSH
+tunnel. On the laptop, Depth Anything V2 (Section~\ref{sec:DAV2}) predicts the relative disparity
+$\hat{d}(u,v)$, which is converted to metric depth $\hat{z}(u,v)$ by fitting $a^{*}$ and $b^{*}$ to
+the ground points (Section~\ref{sec:metric-scale}). Every pixel is then back-projected into a 3D
+point cloud with Equation~\eqref{eq:backprojection}, and the points on the ground plane are
+deleted. The remaining obstacle points are reduced to the 1D range scan
+$R_0, \dots, R_{n-1}$ of Equation~\eqref{eq:ray-scan}, which is sent back over the SSH tunnel to the
+navigation loop on the Pi.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/mde-pipeline}
+  \caption[Monocular depth to range scan pipeline]{Monocular depth to range scan pipeline of the
+    Cyclops rover. The Raspberry Pi sends each camera frame $I$ to the laptop, where Depth
+    Anything V2 predicts a relative disparity map $\hat{d}$. The disparity is calibrated to
+    metric depth $\hat{z}$ using the ground points, back-projected into a 3D point cloud, stripped
+    of ground-plane points, and reduced to a 1D range scan
+    $R_0, \dots, R_{n-1}$ that is returned to the Pi's navigation loop. Text above an arrow is the
+    data carried; text below it is the link it travels over.}
+  \label{fig:mde-pipeline}
+\end{figure}
 
 %%% Local Variables: ***
 %%% mode: latex ***
