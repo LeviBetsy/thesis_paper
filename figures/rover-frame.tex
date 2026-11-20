@@ -1,9 +1,23 @@
-% Body coordinate frame of the Cyclops rover.
+% Robot frame {R} and camera frame {C} of the Cyclops rover.
 %
 % The rover is drawn schematically as a cylinder (the chassis) with a small
-% box and lens (the camera) mounted on its front face. The frame is
-% right-handed: origin at the bottom centre of the rover on the ground plane,
-% +y forward (toward the camera), +z up, and +x to the rover's right.
+% box and lens (the camera) mounted on its front face.
+%
+%   Robot frame {R}: right-handed, origin O_R at the bottom centre of the
+%   rover on the ground plane, +y forward (toward the camera), +z up, and +x
+%   to the rover's right.
+%
+%   Camera frame {C}: OpenCV convention, origin O_C at the lens centre,
+%   +z along the optical axis, +x to the rover's right, +y down in the image.
+%   The camera is pitched down by \camp degrees about the robot x-axis, so in
+%   robot coordinates (s = sin(camp), c = cos(camp)):
+%       x_C = (1, 0, 0),  y_C = (0, -s, -c),  z_C = (0, c, -s).
+%   The camera body and its axes are drawn in a scope whose unit vectors are
+%   these three directions, so they can be given in camera coordinates.
+%
+%   cam_t is the vector from O_R to O_C; cam_p is the angle between the
+%   optical axis and the horizontal.
+%
 % Colours follow the RGB convention: x red, y green, z blue.
 %
 % Pure vector TikZ -- solid fills and plain paths only. Do NOT introduce
@@ -17,15 +31,31 @@
 \begin{tikzpicture}[>=Latex, line join=round, font=\small,
     x={(-1.12cm,-0.42cm)}, y={(0.99cm,-0.48cm)}, z={(0cm,1.38cm)}]
 
-  \def\chR{1.0}    % chassis radius
-  \def\chH{1.0}    % chassis height
+  \def\chR{1.4}    % chassis radius
+  \def\chH{1.7}    % chassis height
   \def\axL{1.1}    % length of each axis outside the chassis
   \def\silA{-41.5} % silhouette angles of the projected rim
   \def\silB{138.5}
 
+  \def\camp{30}    % camera pitch (degrees, positive = downward)
+  \def\camY{1.6}   % O_C, forward offset from O_R (robot y)
+  \def\camZ{1.4}   % O_C, height above the ground (robot z)
+  \def\cw{0.3}     % camera box half-width  (camera x)
+  \def\ch{0.18}    % camera box half-height (camera y)
+  \def\cl{0.34}    % camera box depth       (camera z, behind the lens)
+  \def\caxL{0.9}   % length of each camera axis
+
+  \pgfmathsetmacro\cs{sin(\camp)}
+  \pgfmathsetmacro\cc{cos(\camp)}
+  % screen vectors of the camera axes: robot-frame directions above,
+  % pushed through the x/y/z screen vectors of the picture
+  \pgfmathsetmacro\cyx{-\cs*0.99}\pgfmathsetmacro\cyy{\cs*0.48-\cc*1.38}
+  \pgfmathsetmacro\czx{\cc*0.99}\pgfmathsetmacro\czy{-\cc*0.48-\cs*1.38}
+
   \colorlet{xcol}{red!80!black}
   \colorlet{ycol}{green!55!black}
   \colorlet{zcol}{blue!80!black}
+  \colorlet{tcol}{orange!90!black}
 
   % ---- chassis --------------------------------------------------------
   % side wall: front half of the bottom rim, up, back along the top rim
@@ -49,33 +79,67 @@
   \draw[ycol, dashed] (0,0,0) -- (0,\chR,0);
   \draw[zcol, dashed] (0,0,0) -- (0,0,\chH);
   \fill (0,0,0) circle (1.5pt);
-  \node[anchor=south east, inner sep=2pt] at (0,0,0) {$O$};
+  \node[anchor=south east, inner sep=2pt] at (0,0,0) {$O_R$};
 
-  % ---- camera on the front face ---------------------------------------
-  % top face (+z)
-  \filldraw[fill=black!45, draw=black]
-    (0.28,\chR-0.05,0.82) -- (0.28,\chR+0.2,0.82)
-    -- (-0.28,\chR+0.2,0.82) -- (-0.28,\chR-0.05,0.82) -- cycle;
-  % right-side face (+x)
-  \filldraw[fill=black!75, draw=black]
-    (0.28,\chR-0.05,0.5) -- (0.28,\chR+0.2,0.5)
-    -- (0.28,\chR+0.2,0.82) -- (0.28,\chR-0.05,0.82) -- cycle;
-  % front face (+y)
-  \filldraw[fill=black!60, draw=black]
-    (-0.28,\chR+0.2,0.5) -- (0.28,\chR+0.2,0.5)
-    -- (0.28,\chR+0.2,0.82) -- (-0.28,\chR+0.2,0.82) -- cycle;
-  % lens
-  \filldraw[fill=black!90, draw=black!30]
-    plot[domain=0:360, samples=40, variable=\t]
-      ({0.1*cos(\t)}, \chR+0.2, {0.66+0.1*sin(\t)}) -- cycle;
-  \node[anchor=west, xshift=2pt] at (-0.28,\chR+0.2,0.66) {camera};
+  % ---- camera on the front face (camera frame, pitched down) ----------
+  % Inside this scope (a,b,c) means a*x_C + b*y_C + c*z_C from O_C. The
+  % three faces seen by the viewer are +x_C (right), -y_C (top) and +z_C
+  % (lens face, at c = 0).
+  \begin{scope}[shift={(0,\camY,\camZ)},
+      x={(-1.12cm,-0.42cm)}, y={(\cyx cm,\cyy cm)}, z={(\czx cm,\czy cm)}]
+    % top face (-y_C)
+    \filldraw[fill=black!45, draw=black]
+      (-\cw,-\ch,-\cl) -- (\cw,-\ch,-\cl) -- (\cw,-\ch,0) -- (-\cw,-\ch,0) -- cycle;
+    % right-side face (+x_C)
+    \filldraw[fill=black!75, draw=black]
+      (\cw,-\ch,-\cl) -- (\cw,\ch,-\cl) -- (\cw,\ch,0) -- (\cw,-\ch,0) -- cycle;
+    % lens face (+z_C)
+    \filldraw[fill=black!60, draw=black]
+      (-\cw,-\ch,0) -- (\cw,-\ch,0) -- (\cw,\ch,0) -- (-\cw,\ch,0) -- cycle;
+    % lens
+    \filldraw[fill=black!90, draw=black!30]
+      plot[domain=0:360, samples=40, variable=\t]
+        ({0.1*cos(\t)}, {0.1*sin(\t)}, 0) -- cycle;
+    \node[anchor=south, yshift=1pt] at (0,-\ch,-\cl) {camera};
+  \end{scope}
 
   % ---- axes outside the chassis ---------------------------------------
   \draw[->, thick, xcol] (\chR,0,0) -- (\chR+\axL,0,0)
-    node[anchor=north east] {$x$};
+    node[anchor=north east] {$x_R$};
   \draw[->, thick, ycol] (0,\chR,0) -- (0,\chR+\axL,0)
-    node[anchor=north west] {$y$};
+    node[anchor=north west] {$y_R$};
   \draw[->, thick, zcol] (0,0,\chH) -- (0,0,\chH+\axL)
-    node[anchor=south] {$z$};
+    node[anchor=south] {$z_R$};
+
+  % ---- camera pitch cam_p (robot y-z plane through O_C) ---------------
+  % horizontal reference through O_C, from the z_R axis forward, with a
+  % right-angle mark where it meets z_R; then the arc down to the optical axis
+  \draw[black!55, dashed] (0,0,\camZ) -- (0,\camY+1.6,\camZ);
+  \draw[black!70] (0,0.18,\camZ) -- (0,0.18,\camZ+0.18) -- (0,0,\camZ+0.18);
+  \draw[->, black!80]
+    plot[domain=0:-\camp, samples=20, variable=\t]
+      (0, {\camY+1.15*cos(\t)}, {\camZ+1.15*sin(\t)});
+  \node[anchor=west, inner sep=1pt] at
+    (0, {\camY+1.2*cos(\camp/2)}, {\camZ-1.2*sin(\camp/2)})
+    {$\mathrm{cam}_p$};
+
+  % ---- camera translation cam_t (O_R -> O_C) ---------------------------
+  \draw[black!55, dotted, thick] (0,\camY,0) -- (0,\camY,\camZ);
+  \draw[->, very thick, tcol] (0,0,0) -- (0,\camY,\camZ)
+    node[pos=0.25, anchor=south east, inner sep=2pt] {$\mathrm{cam}_t$};
+
+  % ---- camera axes (camera frame) -------------------------------------
+  \begin{scope}[shift={(0,\camY,\camZ)},
+      x={(-1.12cm,-0.42cm)}, y={(\cyx cm,\cyy cm)}, z={(\czx cm,\czy cm)}]
+    \draw[->, semithick, xcol] (0,0,0) -- (\caxL,0,0)
+      node[anchor=south east, inner sep=1pt] {$x_C$};
+    \draw[->, semithick, ycol] (0,0,0) -- (0,\caxL,0)
+      node[anchor=north west, inner sep=1pt] {$y_C$};
+    \draw[->, semithick, zcol] (0,0,0) -- (0,0,1.5*\caxL)
+      node[anchor=north west, inner sep=1pt] {$z_C$};
+    \fill (0,0,0) circle (1.3pt);
+  \end{scope}
+  \node[anchor=west, inner sep=1pt, xshift=0.5cm, yshift=3pt]
+    at (0,\camY,\camZ) {$O_C$};
 
 \end{tikzpicture}

@@ -4,7 +4,7 @@ Localization is the problem of estimating a robot's pose, its position and headi
 relative to a map of its environment~\cite{thrun2005probabilistic}. A robot cannot measure
 its pose directly. It has to infer the pose from how it has moved and from what its sensors
 observe. Each source is unreliable on its own. Wheel odometry drifts over time, because
-small errors in every wheel count add up as the robot drives. A single range sensor reading is
+small errors in every encoder count add up as the robot drives. A single range sensor reading is
 often ambiguous, because different places in the map can look alike. A localization
 algorithm combines the two sources so that the pose estimate stays accurate as the robot
 moves.
@@ -20,7 +20,7 @@ encoders (Chapter~\ref{ch:embedded}).
 Localization runs inside the navigation loop on the Raspberry Pi
 (Figure~\ref{fig:data-flow}). Figure~\ref{fig:nav-loop} depicts the two modules that make up
 the navigation loop. The localization module takes the range scan from the laptop and the
-left and right wheel counts from the MSP432, and uses them to estimate the rover's pose in
+left and right encoder counts from the MSP432, and uses them to estimate the rover's pose in
 the map. The path planning module takes this pose estimate, plans a path toward the goal,
 and sends target wheel speeds back to the MSP432. Most of this chapter covers the
 localization module. Path planning is described in Section~\ref{sec:navigation}.
@@ -31,7 +31,7 @@ localization module. Path planning is described in Section~\ref{sec:navigation}.
   \input{figures/navigation-loop}
   \caption[Navigation loop on the Raspberry Pi]{Navigation loop on the Raspberry Pi. The
     localization module estimates the rover's pose from the range scan sent by the laptop
-    and the wheel counts sent by the MSP432. The path planning module uses the pose
+    and the encoder counts sent by the MSP432. The path planning module uses the pose
     estimate to send target wheel speeds to the MSP432.}
   \label{fig:nav-loop}
 \end{figure}
@@ -131,7 +131,7 @@ Algorithm~\ref{alg:mcl} lists the MCL procedure, adapted from~\cite{thrun2005pro
 The MCL algorithm is based on the Particle Filter algorithm~\cite{thrun2005probabilistic}.
 Each call to Algorithm~\ref{alg:mcl} updates the belief from time $t-1$ to time $t$. The
 inputs are the previous particle set $\mathcal{X}_{t-1}$, the latest control $u_t$, the
-latest measurement $z_t$, and the map $m$. 
+latest measurement $z_t$ \red{disclaimer different from z}, and the map $m$. 
 
 \begin{algorithm}[htbp]
   \caption{Monte Carlo Localization, adapted from~\cite{thrun2005probabilistic}}
@@ -211,12 +211,12 @@ describes how the rover moved since the previous MCL update, expressed in the ro
 at the start of that interval: $\Delta x$ is the travel along the starting heading,
 $\Delta y$ is the travel to the left of it, and $\Delta\theta$ is the change in heading. The
 encoders do not provide this increment directly. Section~\ref{sec:wheel-odometry} describes
-how it is computed on the Raspberry Pi from the encoder slot counts, and
+how it is computed on the Raspberry Pi from the encoder counts, and
 Section~\ref{sec:odom-sampling} describes how it is used to move the particles.
 
 \subsection{Wheel Odometry}
 \label{sec:wheel-odometry}
-Every 100\,ms, the MSP432 sends the cumulative left and right slot counts $C_L$ and $C_R$ to
+Every 100\,ms, the MSP432 sends the cumulative left and right encoder counts $C_L$ and $C_R$ to
 the Raspberry Pi (Section~\ref{sec:uart-slot-count}). Equation~\ref{eq:odom-count-diff}
 gives the change in count of each wheel between packet $j-1$ and packet $j$.
 \begin{equation}

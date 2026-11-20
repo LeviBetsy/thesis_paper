@@ -393,7 +393,7 @@ subsections.
 
 \subsection{Back-Projection to 3D}
 \red{CHANGE ALL TO CAMERA COORDINATE, MISSING THE TRANSFORMER COORDINATE CHANGE STEP 
-${}^{C}\mathbf{p}$ and ${}^{R}\mathbf{p}$   }
+${}^{C}\mathbf{p}$ and ${}^{R}\mathbf{p}$. back projection in camera frame   }
 
 
 
@@ -421,6 +421,8 @@ scene point $(X, Y, Z)$ imaged at pixel $(u,v)$ from its metric depth $z = \hat{
   Z = z .
   \label{eq:backprojection}
 \end{equation}
+
+\red{change Y because point cloud grow up while screen grow downward}
 Applying Equation~\eqref{eq:backprojection} to every pixel of the metric depth map turns it into a
 3D point cloud, from which the rest of this section builds the range scan.
 
@@ -469,6 +471,7 @@ difference between the two point sets is error in the MDE model's depth predicti
 
 \subsection{Ground-Plane Deletion}
 
+\red{that it is in robot frame}
 The back-projected point cloud includes the floor in front of the rover, which is not an obstacle
 and must be removed before the range scan is formed. Because the camera is mounted at a fixed
 height $h$ above the floor, this is done with a threshold on the vertical coordinate $Y$ of each

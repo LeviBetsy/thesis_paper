@@ -1,7 +1,7 @@
 % Navigation loop on the Raspberry Pi.
 %
 %   Laptop MDE --(range scan)--> Localization
-%   MSP432     --(wheel counts)--> Localization
+%   MSP432     --(encoder counts)--> Localization
 %   Localization --(pose estimate)--> Path planning
 %   Path planning --(target speeds)--> MSP432
 %
@@ -44,8 +44,8 @@
   \draw[flow] (loc.east) -- (plan.west)
         node[lbl, midway, above] {pose estimate};
   \draw[flow] (msp.north -| loc.south) -- (loc.south)
-        node[lbl, midway, right] {wheel counts};
+        node[lbl, pos=0.3, left] {encoder counts};
   \draw[flow] (plan.south) -- (plan.south |- msp.north)
-        node[lbl, midway, right] {wheel speeds};
+        node[lbl, pos=0.7, left] {target wheel speeds};
 
 \end{tikzpicture}

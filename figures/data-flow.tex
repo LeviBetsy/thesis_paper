@@ -6,7 +6,8 @@
 %   2. Command: Pi navigation loop -> UART -> MSP432 PI controller -> PWM ->
 %      H-bridge -> motors.
 %   3. Feedback: encoders -> MSP432 encoder counter -> UART (left/right
-%      counts) -> Pi navigation loop.
+%      counts) -> Pi navigation loop; encoder counter also feeds measured
+%      L, R speed to the MSP432 PI speed controllers.
 %
 % Convention: text above an arrow is the data carried, text below it is the
 % link it travels over. Software modules are white boxes inside a shaded box
@@ -37,8 +38,8 @@
   \draw[group] (3.9,-3.65) rectangle (6.9,2.75);
   \node[title] at (5.4,2.7) {Raspberry Pi};
 
-  \draw[group] (8.4,-3.65) rectangle (11.4,-0.35);
-  \node[title] at (9.9,-0.4) {MSP432};
+  \draw[group] (9.9,-3.65) rectangle (12.9,-0.35);
+  \node[title] at (11.4,-0.4) {MSP432};
 
   % ---- software modules ---------------------------------------------------
   \node[module, minimum height=2.2cm] (mde) at (1.2,0.9)
@@ -47,14 +48,14 @@
   \node[module] (cap) at (5.4,1.6)  {Frame capture};
   \node[module, minimum height=1.8cm] (vel) at (5.4,-2.2) {Navigation loop};
 
-  \node[module] (pid) at (9.9,-1.4) {PI speed\\controller};
-  \node[module] (cnt) at (9.9,-3.0) {Encoder\\counter};
+  \node[module] (pid) at (11.4,-1.4) {L, R PI speed\\controllers};
+  \node[module] (cnt) at (11.4,-3.0) {Encoder\\counter};
 
   % ---- physical hardware -------------------------------------------------
-  \node[hw] (cam)  at (13.6,1.6)  {Camera};
-  \node[hw] (hb)   at (13.6,-1.4) {H-bridge\\(L, R)};
-  \node[hw] (mot)  at (13.6,-3.0) {Motors\\(L, R)};
-  \node[hw] (encs) at (13.6,-4.3) {Encoders\\(L, R)};
+  \node[hw] (cam)  at (14.6,1.6)  {Camera};
+  \node[hw] (hb)   at (14.6,-1.4) {H-bridge\\(L, R)};
+  \node[hw] (mot)  at (14.6,-3.0) {Motors\\(L, R)};
+  \node[hw] (encs) at (14.6,-4.3) {Encoders\\(L, R)};
 
   % ---- perception path ----------------------------------------------------
   \draw[flow] (cam.west) -- (cap.east)
@@ -69,7 +70,7 @@
 
   % ---- command path ------------------------------------------------------
   \draw[flow] (vel.east |- pid.west) -- (pid.west)
-        node[lbl, midway, above] {wheel speeds}
+        node[lbl, midway, above] {target wheel speeds}
         node[lbl, midway, below] {UART};
   \draw[flow] (pid.east) -- (hb.west)
         node[lbl, midway, above] {PWM};
@@ -79,8 +80,10 @@
   \draw[black!60, dashed, line width=0.6pt] (mot.south) -- (encs.north);
   \draw[flow] (encs.west) -| (cnt.south)
         node[lbl, pos=0.25, below] {A/B pulses};
+  \draw[flow] (cnt.north) -- (pid.south)
+        node[lbl, midway, right] {L, R speed};
   \draw[flow] (cnt.west) -- (cnt.west -| vel.east)
-        node[lbl, midway, above] {wheel counts}
+        node[lbl, midway, above] {L, R encoder counts}
         node[lbl, midway, below] {UART};
 
 \end{tikzpicture}
