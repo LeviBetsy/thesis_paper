@@ -26,16 +26,17 @@ any active infrared projection.
 
 
 Our work leverages transformer-based machine learning models to predict 
-depth of each pixel in an RGB image. MDE models are gaining more and more development
-and have become more and more reliable~\cite{DPT,zoedepth, DepthAnythingV2} in the task of predicting depth.
+depth of each pixel in an RGB image. MDE has advanced rapidly in recent years, and
+current models now produce increasingly accurate and reliable depth predictions~\cite{DPT,zoedepth,DepthAnythingV2}.
 Monocular depth estimation is particularly attractive for embedded and resource-constrained
 robotic platforms, such as the cyclops rover, because it removes the need for a
 dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
 and power draw.
 
-The use of MDE for depth perception make the first constraint
-to the robot's environment: It must operate
-in a well lit area
+Relying on MDE for depth perception imposes the first constraint on the robot's
+operating environment: the scene must be well lit. Because MDE infers depth solely
+from visible imagery, its predictions degrade in dark or poorly
+illuminated areas.
 
 
 Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$,
@@ -48,7 +49,7 @@ at pixel $(u,v)$. Figure~\ref{fig:depth-definition} is a visual representation o
   \input{figures/depth-definition}
   \caption[Definition of depth in a depth map]{Definition of depth in a depth map. The scene point
     $P$, on the floor below and to the side of the camera, is imaged at pixel $(u,v)$. Projecting
-    $P$ orthogonally onto the optical axis (dotted lines within the plane of constant depth) gives
+    $P$ onto the optical axis (dotted lines within the plane of constant depth) gives
     its depth $z(u,v)$: the distance from the camera to that projection along the optical axis, not
     the Euclidean distance from the camera to $P$.}
   \label{fig:depth-definition}
@@ -56,15 +57,10 @@ at pixel $(u,v)$. Figure~\ref{fig:depth-definition} is a visual representation o
 
 
 
-The goal of this thesis is to develop the function $f$ described in Eq~\ref{eq:mde-map}.
-Here, $\hat{Z}$ is an estimate of the true depth map $Z$, and each entry $\hat{z}(u,v)$
-approximates the true depth $z(u,v)$ at pixel $(u,v)$. The function $f$ maps a single
-RGB image $I$ to this estimated depth map $\hat{Z}$.
-\begin{equation}
-  f : \mathbb{R}^{H \times W \times 3} \rightarrow \mathbb{R}^{H \times W},
-  \qquad \hat{Z} = f(I),
-  \label{eq:mde-map}
-\end{equation}
+The task of MDE is to recover $Z$ from the single image $I$ alone. We denote the
+resulting estimate by $\hat{Z} \in \mathbb{R}^{H \times W}$, whose entry $\hat{z}(u,v)$
+is the predicted depth at pixel $(u,v)$ and approximates the true depth $z(u,v)$.
+Throughout this thesis, a hat distinguishes a predicted quantity from its true value.
 
 
 
@@ -88,19 +84,17 @@ Dense Prediction Transformer (DPT), substantially improving zero-shot depth esti
 over fully convolutional networks~\cite{DPT}. ViT-based encoders have since become the foundation
 of most state-of-the-art MDE models, including Depth Anything V2~\cite{DepthAnythingV2}.
 
-The advantage of the ViT stems from a difference in \emph{inductive bias}, the assumptions an
-architecture builds in about the structure of its input. A convolution applies a small kernel to
-each local neighborhood, so a CNN assumes that nearby pixels matter most and builds global context
-only indirectly, by stacking layers and downsampling until its \emph{receptive field} (the region
-of the input influencing a feature) covers the scene. \red{too many unexplained
-jargons and} Through self-attention, a ViT instead lets
-every patch attend to every other patch, giving global context from the first layer~\cite{ViT}.
+The advantage of the ViT comes from how much of the image the network looks at in each step. A
+CNN slides a small filter across the image, so its early layers only look at a few neighboring
+pixels at a time, and a view of the whole scene emerges only after many layers are stacked. A ViT
+instead lets every patch exchange information with every other patch, so even its first layer
+looks at the whole image~\cite{ViT}.
 This matters for MDE because depth cues are rarely local: judging the distance to an obstacle
-depends on where it meets the ground plane, the perspective lines converging toward the horizon,
+depends on where it meets the ground plane
 and its size relative to other objects, all of which may be spread across the image. A ViT also
-keeps a constant feature resolution throughout the encoder, avoiding the loss of fine spatial
-detail that a CNN's progressive downsampling causes, which matters for a dense, per-pixel task such
-as MDE~\cite{DPT}.
+works at the same level of detail from start to finish, whereas a CNN repeatedly shrinks its
+working copy of the image and loses fine detail along the way, which is a drawback for a per-pixel
+task such as MDE~\cite{DPT}.
 
 
 
@@ -145,11 +139,12 @@ labels roughly $62$ million unlabeled real images, and the released models are t
 pseudo-labels. Exposure to this large and varied set of real scenes is what allows the model to
 generalize zero-shot to our indoor environment.
 
-Even DAv2-Small runs too slowly on the rover's onboard Raspberry Pi to support
-real-time navigation. Depth inference is therefore offloaded to a laptop: the rover streams each
-camera frame to the laptop, which runs DAv2-Small and returns the resulting depth map.
-The measured inference latency on the
-laptop is reported in Chapter~\ref{ch:results}.
+As noted in Section~\ref{sec:system-architecture}, DAv2 cannot run fast enough on the Raspberry Pi
+to support real-time localization. Without a graphics processing unit (GPU) suited to neural
+network inference, the Raspberry Pi reached only about $0.3$ frames per second in our preliminary
+tests. Depth inference is therefore offloaded to the laptop, which returns a depth estimate for
+each frame the rover sends. Inference times on the laptop is reported in
+Section~\ref{sec:results-latency}.
 
 Figure~\ref{fig:dav2-output} shows a camera frame from the Cyclops rover and the relative
 disparity map $\hat{d}$ that DAv2-Small predicts from it.
@@ -158,25 +153,24 @@ disparity map $\hat{d}$ that DAv2-Small predicts from it.
   \centering
   \begin{subfigure}[b]{0.48\textwidth}
     \centering
-    % TODO: replace with \includegraphics[width=\linewidth]{figures/<dav2-input>}
-    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
-      \red{[PLACEHOLDER]\\RGB frame $I$ from the rover's camera}}}
+    % Left half of the 1280x480 side-by-side image (1px = 1bp at 72 dpi)
+    \includegraphics[width=\linewidth, trim=0 0 640 0, clip]{figures/mde_output.png}
     \caption{Camera frame $I$.}
     \label{fig:dav2-output-rgb}
   \end{subfigure}
   \hfill
   \begin{subfigure}[b]{0.48\textwidth}
     \centering
-    % TODO: replace with \includegraphics[width=\linewidth]{figures/<dav2-disparity>}
-    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
-      \red{[PLACEHOLDER]\\Relative disparity map $\hat{d}$\\predicted by DAv2-Small\\for the same frame}}}
+    % Right half of the 1280x480 side-by-side image
+    \includegraphics[width=\linewidth, trim=640 0 0 0, clip]{figures/mde_output.png}
     \caption{Relative disparity $\hat{d}$.}
     \label{fig:dav2-output-disparity}
   \end{subfigure}
   \caption[Depth Anything V2 output]{A single camera frame from the Cyclops rover and the
-    relative disparity map $\hat{d}$ predicted from it by Depth Anything V2. \red{not really but how do i explain color}
-    Brighter pixels have
-    larger disparity and are therefore closer to the camera.}
+    relative disparity map $\hat{d}$ predicted from it by Depth Anything V2. The disparity map
+    is rendered with a color map in which warmer hues (red) denote larger disparity, and thus
+    surfaces nearer to the camera, while cooler hues (blue) denote smaller disparity, and thus
+    surfaces farther from the camera.}
   \label{fig:dav2-output}
 \end{figure}
 

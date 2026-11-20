@@ -44,7 +44,7 @@ down so that the ground immediately in front of the rover is in view.
   \centering
   \begin{tikzpicture}
     \node[anchor=south west, inner sep=0] (img)
-      {\includegraphics[width=\textwidth]{figures/rover.png}};
+      {\includegraphics[width=\textwidth]{figures/rover.jpg}};
     % Normalized coordinates: (0,0) = bottom-left, (1,1) = top-right of the whole image
     \begin{scope}[x={(img.south east)}, y={(img.north west)},
         lbl/.style={fill=white, draw, thick,
@@ -155,6 +155,7 @@ Equation~\ref{eq:cam-rotation} depicts the rotation ${}^{R}_{C}\mathbf{R}$.
 
 
 \section{System Architecture}
+\label{sec:system-architecture}
 
 
 
