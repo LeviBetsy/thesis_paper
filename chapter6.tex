@@ -31,6 +31,7 @@ step from zero to a constant target, for each wheel, with rise time, percent ove
 back-projected from MDE depth and their \texttt{solvePnP} positions, at several distances and
 lateral offsets (table or figure).}
 
+
 \section{Measurement Model Weights}
 \label{sec:results-meas-model}
 
@@ -38,12 +39,6 @@ lateral offsets (table or figure).}
 case in Table~\ref{tab:meas-tests} (Figure~\ref{fig:meas-test}) and what each case shows about
 the sensitivity of the weights to $x$, $y$, and $\theta$. Also the note there about needing a
 minimum range and an occupancy value of 0.8.}
-
-\section{Localization in Simulation}
-\label{sec:results-simulation}
-
-\red{Promised in Section~\ref{sec:simulation}. Report: pose error over time between the MCL
-mean pose and the virtual rover's true pose, using the noise-free scan.}
 
 \section{Localization Accuracy on the Rover}
 \label{sec:results-localization}
@@ -64,9 +59,11 @@ tripod camera.}
 
 We found that the minimum range for the particle is a significant drawback of the robot,
 since smaller scene give an almost dense map with barely placeable particles. Thus for
-diverse tests we have to settle with more spacious scenes. We can mitigate this with the 
+diverse tests we have to settle with a more spacious scene. We can mitigate this with the 
 abolishing of checkerboard and using pure coordinate transform to get z depth at the closest
-points possible.
+points possible but this wont elivate much.
+
+
 %%% Local Variables: ***
 %%% mode: latex ***
 %%% TeX-master: "thesis.tex" ***

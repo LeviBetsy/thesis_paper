@@ -8,7 +8,7 @@
 % Convention (same as data-flow.tex): text above an arrow is the data carried,
 % text below it is the link it travels over.
 %
-% The two dashed squares are image PLACEHOLDERS. To fill one, replace its
+% The dashed squares are image PLACEHOLDERS. To fill one, replace its
 % \placeholderimg{...} with e.g. \includegraphics[width=2.2cm]{figures/xyz}.
 %
 % Pure vector TikZ -- solid fills and plain paths only (no opacity, shadings
@@ -30,31 +30,34 @@
   ]
 
   % ---- computers (drawn first, so modules sit on top) -------------------
-  \draw[group] (-0.3,-4.9) rectangle (2.3,3.6);
+  \draw[group] (-0.45,-4.9) rectangle (2.45,3.6);
   \node[title] at (1.0,3.55) {Raspberry Pi};
 
   \draw[group] (3.7,-4.9) rectangle (14.15,3.6);
   \node[title] at (8.93,3.55) {Laptop};
 
   % ---- Pi modules -----------------------------------------------------------
-  \node[module] (cap) at (1.0,0.6)  {Frame capture};
+  \node[imgmodule] (cap) at (1.0,0.6)
+       {Frame capture\\[3pt]
+        \includegraphics[width=2.2cm]{figures/ref27_crop.jpg}\\[2pt]
+        {\scriptsize\itshape RGB frame from\\front camera}};
   \node[module] (nav) at (1.0,-3.9) {Navigation loop};
 
   % ---- top row: laptop --------------------------------------------------------
   \node[imgmodule] (dav2) at (5.15,0.6)
        {Depth\\Anything V2\\(\mbox{ViT-S}, frozen)\\[3pt]
-        \placeholderimg{depth map\\image}\\[2pt]
+        \includegraphics[width=2.2cm]{figures/dav2_ref27_crop.jpg}\\[2pt]
         {\scriptsize\itshape Relative depth map}};
 
   \node[imgmodule] (cal) at (8.75,0.6)
        {Depth calibration\\[3pt]
-        \placeholderimg{ground-point\\image}\\[2pt]
+        \includegraphics[width=2.2cm]{figures/ref27_plot_crop.png}\\[2pt]
         {\scriptsize\itshape Ground points fit\\$a^{*}, b^{*}$ per frame}};
 
   \node[imgmodule] (pc) at (12.45,0.6)
        {Back-projection\\[3pt]
-        \placeholderimg{point cloud\\image}\\[2pt]
-        {\scriptsize\itshape 3D point cloud\\in camera frame}};
+        \includegraphics[width=2.2cm]{figures/ref27_pcd_crop.png}\\[2pt]
+        {\scriptsize\itshape 3D point cloud\\in robot frame}};
 
   % ---- bottom row: laptop -----------------------------------------------------
   \node[module, minimum height=1.0cm] (del) at (12.45,-3.9)
