@@ -356,7 +356,16 @@ directly in front of the rover for ground calibration. If no far-row point survi
 
 \label{sec:mde-to-range}
 
-\red{todo}
+The metric depth map from the previous section gives a depth for every pixel, but it is not yet in
+a form the rover can use for localization. The Monte Carlo localization of
+Chapter~\ref{ch:localization} needs an observation that can be compared against a map of the
+environment, and a dense depth map contains far more points than are needed, including floor
+points that are not obstacles. This section therefore converts the depth map into a 1D range
+scan, the same form of observation a planar LiDAR produces, so that the single camera can serve
+as the rover's range finder. The pipeline overview first summarizes the complete process. The
+following subsections then describe its three steps: back-projecting the depth map into a 3D
+point cloud, deleting the points on the ground plane, and reducing the remaining obstacle points
+to a 1D angular range scan.
 
 
 \subsection{Pipeline Overview}
@@ -392,42 +401,56 @@ subsections.
 
 
 \subsection{Back-Projection to 3D}
-\red{CHANGE ALL TO CAMERA COORDINATE, MISSING THE TRANSFORMER COORDINATE CHANGE STEP 
-${}^{C}\mathbf{p}$ and ${}^{R}\mathbf{p}$. back projection in camera frame   }
-
-
 
 The conversion from depth map to 3D points follows the pinhole camera model as described by
-\red{[COMPUTER VISION BOOK AUTHOR]}~\red{[]}, using the intrinsics $f_x$, $f_y$, $c_x$, and $c_y$ calibrated in
+Forsyth and Ponce~\cite{Forsyth_Ponce_CV}, using the intrinsics $f_x$, $f_y$, $c_x$, and $c_y$ calibrated in
 Section~\ref{sec:camera} (Equation~\eqref{eq:intrinsics}). Equation~\eqref{eq:projection} depicts
-the projection of a scene point $(X, Y, Z)$, expressed in the camera frame, onto the pixel $(u,v)$
-at which it appears in the image, where $z$ is the point's depth along the optical axis
-(Figure~\ref{fig:depth-definition}).
+the projection of a scene point ${}^{C}\mathbf{p} = [{}^{C}x,\, {}^{C}y,\, {}^{C}z]^\top$, expressed
+in the camera frame $\{C\}$, onto the pixel $(u,v)$ at which it appears in the image, where
+${}^{C}z$ is the point's depth along the optical axis (Figure~\ref{fig:depth-definition}). \red{this sentence is confusing}
 \begin{equation}
-  u = f_x \frac{X}{z} + c_x,
+  u = f_x \frac{{}^{C}x}{{}^{C}z} + c_x,
   \qquad
-  v = f_y \frac{Y}{z} + c_y,
+  v = f_y \frac{{}^{C}y}{{}^{C}z} + c_y,
   \label{eq:projection}
 \end{equation}
 Inverting Equation~\eqref{eq:projection} recovers a scene point from its pixel whenever its depth
 is known. Equation~\eqref{eq:backprojection} depicts this back-projection, which recovers the
-scene point $(X, Y, Z)$ imaged at pixel $(u,v)$ from its metric depth $z = \hat{z}(u,v)$
-(Section~\ref{sec:metric-scale}).
+camera-frame point ${}^{C}\mathbf{p}$ imaged at pixel $(u,v)$ from its metric depth
+${}^{C}z = \hat{z}(u,v)$ (Section~\ref{sec:metric-scale}).
 \begin{equation}
-  X = \frac{(u - c_x)\, z}{f_x},
+  {}^{C}x = \frac{(u - c_x)\, {}^{C}z}{f_x},
   \qquad
-  Y = \frac{(v - c_y)\, z}{f_y},
+  {}^{C}y = \frac{(v - c_y)\, {}^{C}z}{f_y},
   \qquad
-  Z = z .
+  {}^{C}z = \hat{z}(u,v) .
   \label{eq:backprojection}
 \end{equation}
 
-\red{change Y because point cloud grow up while screen grow downward}
+\red{check}
 Applying Equation~\eqref{eq:backprojection} to every pixel of the metric depth map turns it into a
-3D point cloud, from which the rest of this section builds the range scan.
+3D point cloud expressed in the camera frame $\{C\}$. Because the camera is pitched downward by
+$\mathrm{cam}_p$, the ${}^{C}y$- and ${}^{C}z$-axes are not aligned with the floor, so the
+camera-frame coordinates do not directly give a point's height above the floor or its distance
+ahead of the rover. Each point is therefore expressed in the robot frame $\{R\}$ using the rigid
+transformation of Equation~\eqref{eq:cam-to-robot}. Equation~\eqref{eq:cloud-to-robot} depicts
+this change of coordinates applied to each back-projected point, where ${}^{R}_{C}\mathbf{R}$ is
+the camera-to-robot rotation of Equation~\eqref{eq:cam-rotation} and $\mathrm{cam}_t$ is the
+position of the camera origin $O_C$ in the robot frame.
+\begin{equation}
+  {}^{R}\mathbf{p} =
+  \begin{bmatrix} {}^{R}x \\ {}^{R}y \\ {}^{R}z \end{bmatrix}
+  = {}^{R}_{C}\mathbf{R}
+  \begin{bmatrix} {}^{C}x \\ {}^{C}y \\ {}^{C}z \end{bmatrix}
+  + \mathrm{cam}_t
+  \label{eq:cloud-to-robot}
+\end{equation}
+In the robot frame, ${}^{R}x$ is the lateral offset of a point to the rover's right, ${}^{R}y$ is
+its distance ahead of the rover, and ${}^{R}z$ is its height above the floor. The rest of this
+section builds the range scan from the point cloud in the robot frame.
 
 Figure~\ref{fig:point-cloud} shows a camera frame from the Cyclops rover alongside the point
-cloud back-projected from it, colored by depth $Z$\red{double check code, i am pretty sure it is colored by Z}
+cloud back-projected from it, colored by depth ${}^{C}z$\red{double check code, i am pretty sure it is colored by Z}
 . Along with the obstacles in front of the
 rover, the cloud contains every visible point on the floor, which is removed before the range
 scan is formed.
@@ -447,13 +470,13 @@ scan is formed.
     \centering
     % TODO: replace with \includegraphics[width=\linewidth]{figures/<point-cloud>}
     \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
-      \red{[PLACEHOLDER]\\Point cloud from the same frame,\\colored by height $Y$, viewed from\\behind and above the rover}}}
+      \red{[PLACEHOLDER]\\Point cloud from the same frame,\\colored by height ${}^{R}z$, viewed from\\behind and above the rover}}}
     \caption{Back-projected point cloud.}
     \label{fig:point-cloud-3d}
   \end{subfigure}
   \caption[Back-projected point cloud]{A single camera frame and the 3D point cloud obtained by
     applying Equation~\eqref{eq:backprojection} to every pixel of its metric depth map. Points are
-    colored by their height $Y$, so the floor appears as a single band of color beneath the
+    colored by their height ${}^{R}z$ in the robot frame, so the floor appears as a single band of color beneath the
     obstacles.}
   \label{fig:point-cloud}
 \end{figure}
@@ -471,11 +494,10 @@ difference between the two point sets is error in the MDE model's depth predicti
 
 \subsection{Ground-Plane Deletion}
 
-\red{that it is in robot frame}
 The back-projected point cloud includes the floor in front of the rover, which is not an obstacle
-and must be removed before the range scan is formed. Because the camera is mounted at a fixed
-height $h$ above the floor, this is done with a threshold on the vertical coordinate $Y$ of each
-point: points less than $2$~cm above the floor are classified as ground plane and discarded. The
+and must be removed before the range scan is formed. \red{this is too lower information for obstacle
+detection. If not processed will show up as obstacle all around robot}, this is done with a threshold on the robot-frame height ${}^{R}z$ of each
+point (Equation~\eqref{eq:cloud-to-robot}): points less than $2$~cm above the floor are classified as ground plane and discarded. The
 ceiling is not filtered, since our test area has a high ceiling and the rover's camera is tilted
 downward, placing the ceiling outside the camera's field of view.
 

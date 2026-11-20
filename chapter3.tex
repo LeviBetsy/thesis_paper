@@ -2,8 +2,9 @@
 \label{ch:embedded}
 
 This chapter describes the hardware and low-level software of the Cyclops rover. It covers
-the rover's components and architecture, its closed-loop wheel speed control, the UART link
-between its two boards, and the calibration of its single camera.
+the rover's components and architecture, the pulse-width modulation (PWM) that drives its
+motors, its closed-loop wheel speed control, the serial link between its two boards, and
+the calibration of its single camera.
 
 \section{System Overview}
 The Cyclops rover is built from five main hardware components:
@@ -13,7 +14,8 @@ The Cyclops rover is built from five main hardware components:
   \item \textbf{MSP432 LaunchPad}~\cite{msp432_p4} -- the microcontroller that runs the low-level
     software.
   \item \textbf{Raspberry Pi 5}~\cite{rpi5_brief} -- the onboard computer that captures camera frames
-    and runs the navigation loop.
+    and runs the navigation loop, the program that localizes the rover and decides how it
+    moves.
   \item \textbf{MacBook Pro (M1)} -- an off-board laptop that runs monocular depth
     estimation on the frames streamed from the Raspberry Pi 5.
   \item \textbf{MKTechnic USB camera}~\cite{mktechnic_usb_camera} -- the single
@@ -22,9 +24,11 @@ The Cyclops rover is built from five main hardware components:
 \end{itemize}
 
 The rover runs entirely on battery power. The Raspberry Pi 5 is powered by a
-Geekworm X1202 UPS HAT~\cite{geekworm_x1202}, which holds four 18650 lithium-ion
-cells and lets the Raspberry Pi 5 run without a wall power supply. The TI-RSLK
-chassis has its own power supply: a battery holder with six 1.2\,V cells.
+Geekworm X1202 UPS HAT~\cite{geekworm_x1202}. A HAT
+is an add-on board that stacks onto the Raspberry Pi's pin
+header. The X1202 holds four 18650 lithium-ion cells and lets the Raspberry Pi 5 run
+without a wall power supply. The TI-RSLK chassis has its own power supply: a battery
+holder with six 1.2\,V rechargeable cells.
 
 Throughout this thesis, the onboard computer is always written out as
 ``Raspberry Pi 5'' or ``Raspberry Pi'' and never shortened to ``Pi.'' This
@@ -32,10 +36,9 @@ avoids confusion with the proportional--integral (PI) controller that the MSP432
 uses to regulate motor speed.
 
 Figure~\ref{fig:cyclops-rover} shows the assembled Cyclops rover. The Raspberry Pi 5
- sit on top of the TI-RSLK chassis, the MSP432 LaunchPad is mounted
-on the chassis below it, and the USB camera is fixe d to the front of the rover,
-facing forward and titled down so that the near field in front of
-the rover is in view.
+sits on top of the TI-RSLK chassis, and the MSP432 LaunchPad is mounted on the chassis
+below it. The USB camera is fixed to the front of the rover, facing forward and tilted
+down so that the ground immediately in front of the rover is in view.
 
 \begin{figure}[htbp]
   \centering
@@ -61,7 +64,7 @@ the rover is in view.
       \draw[ann, green!70!black] (pi.south east) -- (0.200,0.820);
       % Battery HAT
       \draw[ann, orange] (0.250,0.682) ellipse (0.101 and 0.055);
-      \node[lbl, orange, text=black] (hat) at (0.40,0.66) {Pi 5 battery HAT};
+      \node[lbl, orange, text=black] (hat) at (0.40,0.66) {Battery HAT};
       \draw[ann, orange] (hat.west) -- (0.351,0.682);
     \end{scope}
   \end{tikzpicture}
@@ -75,13 +78,15 @@ robot frame $\{R\}$ and the camera frame $\{C\}$. The origin of the robot frame,
 is located at the bottom center of the rover, on the ground plane centered between the
 two wheels. Its $y$-axis points forward, in the direction the camera faces; its $z$-axis
 points up; and its $x$-axis points to the rover's right. The camera frame follows the
-OpenCV convention~\cite{opencv_library}. Its origin $O_C$ is at the center of the lens,
+convention of OpenCV~\cite{opencv_library}. Its origin $O_C$ is at the center of the lens,
 its $z$-axis is the optical axis, its $x$-axis points to the right of the image (the
 rover's right), and its $y$-axis points down the image. Because the camera is tilted
 downward, the camera's $y$- and $z$-axes are not aligned with the rover's.
-
-A point $\mathbf{p}$ is written ${}^{R}\mathbf{p}$ when its coordinates are expressed in
-the robot frame and ${}^{C}\mathbf{p}$ when they are expressed in the camera frame.
+A point $\mathbf{p}$ is written
+${}^{R}\mathbf{p} = [{}^{R}x,\, {}^{R}y,\, {}^{R}z]^\top$ when its coordinates are
+expressed in the robot frame and
+${}^{C}\mathbf{p} = [{}^{C}x,\, {}^{C}y,\, {}^{C}z]^\top$ when they are expressed in the
+camera frame.
 
 \begin{figure}[htbp]
   \centering
@@ -97,12 +102,6 @@ the robot frame and ${}^{C}\mathbf{p}$ when they are expressed in the camera fra
   \label{fig:rover-frame}
 \end{figure}
 
-Table~\ref{tab:rover-specs} lists the physical dimensions of the Cyclops rover. The physical
-properties of the rover is used for its localization and depth estimation in later chapters.
-Track width ($w_w$) shows the distance between the two wheels and the camera translation matrix ($\mathrm{cam}_t$)
-shows the camera's position in the rover coordinate frame (Figure~\ref{fig:rover-frame}) in cm.
-The camera pitch angle ($\mathrm{cam}_p$) is the angle between the camera's optical axis and
-the horizontal plane of the rover, where a positive pitch tilts the camera downward. 
 
 \begin{table}[htbp]
   \centering
@@ -113,28 +112,37 @@ the horizontal plane of the rover, where a positive pitch tilts the camera downw
     \hline
     Parameter & Symbol & Value \\
     \hline
-    Overall Radius & $r$ & 7.5cm \\
-    Wheel diameter & $d_w$ & 7cm \\
-    Track width (wheel separation) & $w_w$ & 12.2cm \\
-    Camera translation matrix [x,y,z] & $\mathrm{cam}_t$ & [30,0, 12]\\
+    Chassis radius & $r$ & 7.5\,cm \\
+    Wheel diameter & $d_w$ & 7\,cm \\
+    Track width (wheel separation) & $w_w$ & 12.2\,cm \\
+    Camera translation $[x,\,y,\,z]$ & $\mathrm{cam}_t$ & $[0,\,7,\,11]$\,cm \\
     Camera pitch angle & $\mathrm{cam}_p$ & 30$^\circ$ \\
+    Encoder counts per wheel revolution & $N$ & 360 \\
     \hline
   \end{tabular}
 \end{table}
 
-The camera translation $\mathrm{cam}_t$ and pitch $\mathrm{cam}_p$ relate the two frames. A
-point measured by the camera, ${}^{C}\mathbf{p}$, is expressed in the robot frame by first
-rotating it into the rover's orientation and then translating it by the camera's position.
+Table~\ref{tab:rover-specs} lists the physical parameters of the Cyclops rover, which are
+used for localization and depth estimation in later chapters. The track width $w_w$ is the
+distance between the two wheels, and $N$ is the number of encoder counts in one full
+revolution of a wheel (Section~\ref{sec:encoder}).
+
+The camera translation $\mathrm{cam}_t$ and pitch $\mathrm{cam}_p$ relate the robot frame
+to the camera frame. The translation $\mathrm{cam}_t$ is the position of the camera origin
+$O_C$ in the robot frame. The pitch $\mathrm{cam}_p$ is the angle between the camera's
+optical axis and the horizontal plane of the rover, where a positive pitch tilts the camera
+downward. A point measured by the camera, ${}^{C}\mathbf{p}$, is expressed in the robot frame
+as ${}^{R}\mathbf{p}$ by a rigid transformation, a rotation followed by a translation that
+preserves distances and angles~\cite{Forsyth_Ponce_CV}.
 Equation~\ref{eq:cam-to-robot} depicts this transformation, where ${}^{R}_{C}\mathbf{R}$ is
-the rotation from the camera frame to the robot frame.
+the rotation from the camera frame to the robot frame. Chapter~\ref{ch:mde} uses this
+transformation to move the points recovered from the depth map into the robot frame.
 \begin{equation}
   {}^{R}\mathbf{p} = {}^{R}_{C}\mathbf{R}\;{}^{C}\mathbf{p} + \mathrm{cam}_t
   \label{eq:cam-to-robot}
 \end{equation}
-Each column of ${}^{R}_{C}\mathbf{R}$ is one camera axis written in robot coordinates. The
-camera's $x$-axis is the same as the rover's, while its $y$- and $z$-axes are tilted downward
-by the pitch angle $\mathrm{cam}_p$ (Figure~\ref{fig:rover-frame}).
-Equation~\ref{eq:cam-rotation} depicts the resulting rotation matrix.
+
+Equation~\ref{eq:cam-rotation} depicts the rotation ${}^{R}_{C}\mathbf{R}$.
 \begin{equation}
   {}^{R}_{C}\mathbf{R} =
   \begin{bmatrix}
@@ -144,10 +152,7 @@ Equation~\ref{eq:cam-rotation} depicts the resulting rotation matrix.
   \end{bmatrix}
   \label{eq:cam-rotation}
 \end{equation}
-For example, the optical axis ${}^{C}\mathbf{p} = (0, 0, 1)$ is rotated to the direction
-$(0, \cos\mathrm{cam}_p, -\sin\mathrm{cam}_p)$ in the robot frame, which points forward and
-down by $\mathrm{cam}_p$. Chapter~\ref{ch:mde} uses this transformation to move the points
-recovered from the depth map into the robot frame.
+
 
 \section{System Architecture}
 
@@ -155,15 +160,16 @@ recovered from the depth map into the robot frame.
 
 
 Figure~\ref{fig:data-flow} depicts the flow of data between the laptop, the Raspberry Pi,
-the MSP432, and the rover hardware. Camera frames are sent from the Raspberry Pi over
-an SSH tunnel to the laptop, which runs monocular depth estimation and returns ranges
-per bearing angle directly to the Raspberry Pi's navigation loop. The navigation loop sends
-target wheel speeds over UART to the
-MSP432. The MSP432 then uses this target wheel speed in the left and right PI 
-controllers to drive the motors through an H-bridge (a switch circuit that lets a small
-control signal power the motor and flip its direction).
-The encoder counts
-for the left and right wheels go back to the Raspberry Pi over the same UART link.
+the MSP432, and the rover hardware. The Raspberry Pi sends camera frames to the laptop over
+Wi-Fi through an SSH tunnel. The laptop runs monocular depth estimation on each frame and returns a set of
+ranges, each being the distance to the nearest obstacle along one bearing, or horizontal
+direction, relative to the rover's heading (Section~\ref{sec:mde-to-range}). These ranges
+go to the Raspberry Pi's navigation loop, which sends target wheel speeds to the MSP432
+over a universal asynchronous receiver-transmitter (UART) serial link. The MSP432 uses
+these targets in its left and right PI controllers to drive the motors through an
+H-bridge, a switching circuit that lets a small control signal power a motor and reverse
+its direction. The left and right encoder counts return to the Raspberry Pi over the same
+UART link.
 
 \begin{figure}[!htb]
   \centering
@@ -177,54 +183,48 @@ The computation is split across three devices:
 \begin{itemize}
   \item \textbf{Raspberry Pi} (high-level tasks):
   \begin{itemize}
-    \item Captures camera frames
-    \item Communicates with the laptop
-    \item Runs the navigation loop (Section~\ref{sec:navigation})
+    \item Captures camera frames and sends them to the laptop.
+    \item Runs the navigation loop, which uses the returned ranges to estimate where the
+      rover is in its environment and to choose its next movement
+      (Section~\ref{sec:navigation}, Chapter~\ref{ch:localization}).
   \end{itemize}
   \item \textbf{MSP432 microcontroller} (low-level tasks):
   \begin{itemize}
-    \item Accumulates encoder pulses (Section~\ref{sec:encoder})
-    \item Reads target wheel speeds
-    \item Runs the proportional--integral (PI) speed controllers (Section~\ref{sec:PI})
+    \item Counts encoder pulses, which measure how far each wheel has turned
+      (Section~\ref{sec:encoder}).
+    \item Receives target wheel speeds from the Raspberry Pi.
+    \item Runs the PI speed controllers, which keep each wheel turning at its target speed
+      (Section~\ref{sec:PI}).
   \end{itemize}
   \item \textbf{Laptop}:
   \begin{itemize}
-    \item Runs the monocular depth estimation (Chapter~\ref{ch:mde})
+    \item Runs monocular depth estimation, which recovers the distance to obstacles from a
+      single camera image (Chapter~\ref{ch:mde}).
   \end{itemize}
 \end{itemize}
-
-Each of these components is explained in more detail in later chapters; here, a brief
-overview of the role each one plays is given. Monocular depth estimation gives the rover
-the ability to perceive its environment by recovering the distance to obstacles from a
-single camera image (Chapter~\ref{ch:mde}). The navigation loop uses these distances to
-localize the rover, estimating where it is within its environment and to issue movement commands
-(Chapter~\ref{ch:localization}). The encoder counter tracks how far each wheel has turned,
-which gives the rover an estimate of how much it has moved in a control loop (Section~\ref{sec:encoder}). 
-Finally, the PI
-speed controllers regulate the speed of each motor so that the wheels turn at the speeds
-requested by the navigation loop (Section~\ref{sec:PI}).
 
 The rover is split into two boards because motor control needs precise, real-time
 timing. The PI controller must update at a fixed period, and every encoder pulse must be
 counted for the measured speed to be correct. The Raspberry Pi OS~\cite{rpi_os} is a
 general-purpose operating system that does not guarantee when a process is
-scheduled~\cite{reghenzani2019rtlinux}, so camera capture, network traffic, and other
-processes can delay the controller or cause pulses to be missed. The MSP432 instead
-executes firmware directly on the hardware, without an operating system: hardware timers trigger the control update at a fixed period, hardware
-PWM drives the motors without CPU involvement, and interrupts respond to each encoder
-edge with minimal latency~\cite{msp432_p4}.
+scheduled~\cite{reghenzani2019rtlinux}. Camera capture, network traffic, and other
+processes can therefore delay the controller or cause pulses to be missed.
+
+The MSP432 avoids this problem because it runs firmware, a single program executed directly
+on the hardware without an operating system. Its hardware timers trigger the control update
+at a fixed period, and its PWM hardware drives the motors without CPU involvement
+(Section~\ref{sec:pwm}). Each encoder pulse triggers an interrupt, a hardware signal that
+pauses the main program and immediately runs a short handler routine, so pulses are counted
+with minimal delay~\cite{msp432_p4}.
 
 The Raspberry Pi provides what the microcontroller lacks: a camera interface, Wi-Fi for
 the SSH tunnel to the laptop, and enough memory and processing power to run navigation
 and localization in a high-level language. This split isolates the timing-critical loop
-from the Raspberry Pi's variable workload. The boards exchange only compact UART
-messages: target wheel speeds to the MSP432, and left and right encoder counts back to
-the Raspberry Pi.
+from the Raspberry Pi's variable workload.
 
-The Raspberry Pi, however, lacks the processing power to run the vision transformer depth
-model at a usable frame rate to support real-time localization, 
-so depth inference is offloaded to the laptop; this
-decision is discussed further in Chapter~\ref{ch:mde}.
+The Raspberry Pi, however, cannot run the vision transformer depth model fast enough to
+support real-time localization from our preliminary tests (around 0.3 FPS). Depth inference is therefore offloaded to the
+laptop, a decision discussed further in Chapter~\ref{ch:mde}.
 
 Loop rates are reported in Chapter~\ref{ch:results} for reference, but system latency and power
 consumption are outside the scope of this thesis.
@@ -232,8 +232,8 @@ consumption are outside the scope of this thesis.
 \section{PWM}
 \label{sec:pwm}
 
-The MSP432 controls motor control effort using pulse-width modulation (PWM). A PWM
-signal is a square wave with a fixed period that switches between high and low. The
+The MSP432 uses pulse-width modulation (PWM) to set the drive strength of each motor. A
+PWM signal is a square wave with a fixed period that switches between high and low. The
 fraction of each period that the signal spends high is called the duty cycle~\cite{valvano}.
 Figure~\ref{fig:pwm-duty} compares a 10\% duty cycle, where the signal is high for only
 a short part of each period, with a 90\% duty cycle, where it is high for most of the
@@ -248,10 +248,10 @@ period.
   \label{fig:pwm-duty}
 \end{figure}
 
-The MSP432 generates two PWM signals, one for each motor. Both
-signals come from the hardware timer Timer\_A0. Once the timer is configured, it
-produces the signals on its own with no CPU involvement. To change a duty cycle, the
-firmware only writes a new number to the timer.
+The MSP432 generates two PWM signals, one for each motor. Both signals come from the
+hardware timer Timer\_A0. Once the timer is configured, it produces the signals without
+CPU intervention. To change a duty cycle, the firmware only writes a new compare value
+to the timer's register.
 
 The timer configuration follows Valvano~\cite{valvano}. 
 The timer is clocked at 1.5\,MHz, so each tick lasts about 0.667\,\textmu s. It runs in
@@ -281,59 +281,58 @@ power. The firmware rejects any value with $D \geq P$, so the largest usable val
 7{,}499. The value $D$ is not fixed; it is recomputed every sample period from the
 output $u[k]$ of the wheel's PI speed controller, as described in Section~\ref{sec:PI}.
 
-Each PWM signal drives an H-bridge on the TI-RSLK chassis~\cite{valvano}, which switches the
-battery voltage across the motor and sets its direction. A larger duty cycle applies
-the battery voltage for a larger fraction of each period, so the motor spins faster.
+Each PWM signal drives the H-bridge on the TI-RSLK chassis~\cite{valvano}. A larger duty
+cycle applies the battery voltage across the motor for a larger fraction of each period,
+so the motor spins faster.
 
-\section{Control loop}
+\section{Control Loop}
 \label{sec:control-loop}
 
 An open-loop controller sets a duty cycle and assumes it produces the desired wheel
-speed. In practice, motors do not follow consistent speed with the same duty cycle
-because the speed varies with
-battery voltage, load, and differences between the two motors. Thus, our system adopts 
-a closed-loop controller
-which measures each wheel speed in real-time to correct their duty cycle command~\cite{valvano}.
+speed. In practice, the same duty cycle does not always produce the same speed, because
+the speed also depends on battery voltage, load, and differences between the two
+motors~\cite{valvano}. The Cyclops rover therefore uses a closed-loop controller, which
+measures each wheel's speed continuously and corrects that wheel's duty cycle
+accordingly.
 
 The controller runs in discrete time: the MSP432 measures the wheel and updates the motor
 command once per sample period. A quantity written with $[k]$ is
 therefore a value taken at sample $k$, and a quantity without $[k]$ stays constant
 between samples. The symbols used to describe the speed loop are defined as follows.
 \begin{description}
-  \item[$k$] The sample index, counting the timer interrupts since the loop started.
-    Sample $k$ occurs at time $t = k\,T_s$.
+  \item[$k$] The sample index, a counter that starts at $0$ and increases by one each
+    time the controller measures the wheel and updates the motor command, so
+    $k = 0, 1, 2, \dots$ Sample $k$ occurs at time $t = k\,T_s$.
   \item[$T_s$] The sample period, the fixed time between two samples
     ($T_s = 10$\,ms).
   \item[$\dot{C}^*$] The target wheel speed sent by the Raspberry Pi, in counts per second.
-  \item[$\dot{C}^*\,T_s$] The same target speed converted to counts per sample. The encoder
-    measures speed in counts per sample period, so the target must be expressed in the
+  \item[$\dot{C}^*\,T_s$] The same target speed converted to counts \emph{per sample}. The encoder
+    measures speed in counts for every sample period, so the target must be expressed in the
     same units before the two can be compared. Multiplying by $T_s$ performs this
     conversion; for example, a target of $\dot{C}^* = 500$ counts per second becomes
-    $\dot{C}^*\,T_s = 500 \times 0.01 = 5$ counts per sample.
+    a target speed of $\dot{C}^*\,T_s = 500 \times 0.01 = 5$ counts per sample.
   \item[{$\Delta C[k]$}] The measured wheel speed at sample $k$, in counts per sample,
     obtained from the number of encoder counts accumulated during the last sample period
     (Section~\ref{sec:encoder}).
   \item[{$e[k]$}] The speed error at sample $k$, the difference between the target
-    $\dot{C}^*\,T_s$ and the measured speed $\Delta C[k]$.
+    $\dot{C}^*\,T_s$ and the measured speed $\Delta C[k]$ (Equation~\ref{eq:pi-error}).
   \item[{$u[k]$}] The controller output at sample $k$, a signed PWM duty value that sets
     the motor's drive strength and direction (Section~\ref{sec:PI}).
 \end{description}
 
-The target speed is sent in the unit \emph{counts per second} rather than RPM (rotation per minute) 
-because it is transmitted as
-an integer (Section~\ref{sec:uart-speed}), and one RPM equals $N/60 = 6$ counts per second,
-so counts per second gives six times finer speed resolution. It is also the encoder's native
-unit, so the MSP432 can use the target directly without converting units.
+The target speed is expressed in counts per second (encoder counts per second) rather than revolutions per minute
+(RPM) for two reasons. First, the target is transmitted as an integer
+(Section~\ref{sec:uart-speed}). Since one RPM equals $N/60 = 6$ counts per second, an
+integer in counts per second has six times finer resolution than an integer in RPM.
+Second, counts are the encoder's native unit, so the MSP432 can use the target without
+converting units.
 
 Figure~\ref{fig:control-loop} shows the closed speed loop that runs on the MSP432 for
-each wheel. The target speed $\dot{C}^*\,T_s$ from the Raspberry Pi is compared against the
-measured speed $\Delta C[k]$ to form the speed error $e[k]$. The PI controller converts
-this error into a new duty cycle $u[k]$, which the PWM and H-bridge apply to the motor.
-The encoder produces pulses as the wheel turns, and the speed calculation counts those
-pulses over one sample period to obtain the next $\Delta C[k]$. The loop repeats every
-sample period ($10$\,ms), so any difference between the target and actual speed is corrected
-continuously. The encoder and speed calculation are described in
-Section~\ref{sec:encoder}, and the PI controller in Section~\ref{sec:PI}.
+each wheel. At each sample, the measured speed $\Delta C[k]$ is subtracted from the target
+$\dot{C}^*\,T_s$ to form the error $e[k]$. The PI controller converts this error into a
+new duty value $u[k]$, which the PWM and H-bridge apply to the motor. The encoder
+(Section~\ref{sec:encoder}) then measures the resulting speed for the next sample, and the
+PI controller (Section~\ref{sec:PI}) corrects any remaining difference.
 
 \begin{figure}[htbp]
   \centering
@@ -347,32 +346,34 @@ Section~\ref{sec:encoder}, and the PI controller in Section~\ref{sec:PI}.
 \subsection{Encoder}
 \label{sec:encoder}
 
-
-
-The incremental rotary encoder, or simply encoder, on the TI-RSLK rover is a sensor 
-that converts the rotation of the motor shaft into a train of electrical
-pulses, with a fixed number of pulses per
-revolution~\cite{valvano}. Counting the pulses tells how far the shaft has turned, and counting them
-over a known time interval tells the average rotational speed. Each wheel of the Cyclops rover
-has its own encoder. The MSP432 uses the counts to measure wheel speed for the PI
-controller (Section~\ref{sec:PI}) and to report how far each wheel has traveled to the
-Raspberry Pi.
-
-The encoders on the Cyclops rover are optical. A slotted disk turns with the wheel, and
-light passing through the slots falls on a photodetector~\cite{valvano}. As the wheel turns, the slots
-alternately pass and block the light, so the photodetector output switches between high
-and low once per slot. The disk has $N = 360$ slots per revolution. Thus, 360 pulses would be observed for one
-full rotation of a wheel.
+An incremental rotary encoder, or simply encoder, is a sensor that converts rotation into
+a train of electrical pulses, with a fixed number of pulses per
+revolution~\cite{valvano}. Counting the pulses gives how far the wheel has turned, and
+counting them over a known time interval gives its average rotational speed. Each wheel of
+the Cyclops rover has its own encoder, which produces $N = 360$ counts per full revolution
+of the wheel. The MSP432 uses the counts to measure wheel speed for the PI controller
+(Section~\ref{sec:PI}) and to report to the Raspberry Pi how far each wheel has traveled.
 
 The Cyclops rover uses quadrature encoders, which detect the direction of rotation as well
 as its speed. The MSP432 keeps a signed count $C$ for each wheel, which is incremented
 when the wheel moves the rover forward and decremented when it moves the rover backward.
 Readers interested in how quadrature encoding works are referred to~\cite{valvano}.
 
+% Optical encoder figure removed: the encoder type on the TI-RSLK is not confirmed.
+% \begin{figure}[htbp]
+%   \centering
+%   \input{figures/encoder}
+%   \caption[Optical incremental encoder]{Optical incremental encoder. (a) The slotted disk
+%     turns with the motor shaft; only 24 of the $N = 360$ slots are drawn for clarity.
+%     (b) An LED and a photodetector sit on opposite sides of the disk, so light reaches the
+%     photodetector only when a slot passes between them. (c) The photodetector output
+%     therefore produces one pulse per slot as the disk turns.}
+%   \label{fig:encoder}
+% \end{figure}
 
 Wheel speed is sampled by a periodic timer interrupt on the MSP432 that fires every
-$T_s = 10$\,ms. At each sampling, the interrupt service routine reads the current count of each wheel and
-subtracts the count it read on the previous sample. Equation~\ref{eq:encoder-speed} gives
+$T_s = 10$\,ms. At each sample, the interrupt handler reads the current count of each wheel
+and subtracts the count it read at the previous sample. Equation~\ref{eq:encoder-speed} gives
 the wheel speed $\Delta C[k]$ at sample $k$, in counts per sample period.
 \begin{equation}
   \Delta C[k] = C[k] - C[k-1]
@@ -385,11 +386,9 @@ physical units.
 \subsection{PI Control}
 \label{sec:PI}
 
-
-The controller in the speed loop is a
-PI controller~\cite{Alciatore_Mechatronics}. Each wheel has its own controller, and
-both run inside the 10\,ms timer interrupt described in Section~\ref{sec:encoder},
-immediately after the wheel speeds $\Delta C[k]$ are measured.
+The controller in the speed loop is a PI controller~\cite{Alciatore_Mechatronics}. Each
+wheel has its own controller, and both run inside the sampling interrupt described in
+Section~\ref{sec:encoder}, immediately after the wheel speeds $\Delta C[k]$ are measured.
 
 Equation~\ref{eq:pi-error} gives the speed error $e[k]$ at sample $k$.
 \begin{equation}
@@ -411,40 +410,40 @@ proportional gain.
 \end{equation}
 By Equation~\ref{eq:pwm-duty}, the resulting duty cycle is $|u[k]|/7{,}500$. A positive
 $u[k]$ drives the wheel forward, and a negative $u[k]$ drives it backward.
-Both wheels use the same gains, $K_P = 200$ and $K_I = 20$, which we chose after
-testing a few values.
+Both wheels use the same gains, $K_P = 200$ and $K_I = 20$, which were tuned empirically
+on the rover. Only a small number of gain combinations were tested, because precise speed
+control is not the focus of this thesis.
 
-No derivative term is used, since PI control is commonly recommended for motor speed
-control~\cite{valvano} and preliminary tests showed it performs well enough for the rover.
-
-The performance of the controller is evaluated with a step-response test, the simplest
-test that gives measurable results. Starting from no movement, the target speed of a wheel
-is changed abruptly from zero to $\dot{C}^* = 1{,}100$ counts per second (cps), and the
-measured speed $\Delta C[k]$ is recorded on every sample as the wheel speeds up. This
-target is chosen because it is close to the calculated maximum wheel speed of about
-1{,}200\,cps. The results of this test are presented in Chapter~\ref{ch:results}. The step
-response is judged by three simple measures~\cite{valvano}:
+The performance of the controller is evaluated with a step-response test~\cite{valvano}.
+Starting from rest, the target speed of a wheel is changed abruptly from zero to
+$\dot{C}^* = 1{,}100$ counts per second, and the measured speed $\Delta C[k]$ is recorded
+at every sample as the wheel accelerates. This target is close to the measured maximum
+wheel speed of about 1{,}200 counts per second. The step response is evaluated with three
+standard measures~\cite{valvano}:
 \begin{itemize}
-  \item \textbf{Transient response} -- how long the wheel takes to reach 99\% of the
-    target speed.
   \item \textbf{Stability} -- whether the wheel settles to a smooth, steady speed instead
     of oscillating.
+  \item \textbf{Settling time} -- the time after which the measured speed stays within
+    $\pm 2\%$ of the target.
   \item \textbf{Steady-state error} -- the average of the error $e[k]$
-    (Equation~\ref{eq:pi-error}) once the speed has reached stability.
+    (Equation~\ref{eq:pi-error}) after the speed has settled.
 \end{itemize}
+The results of this test are presented in Chapter~\ref{ch:results}.
 
 \section{UART}
 \label{sec:uart}
 
-The MSP432 and the Raspberry Pi communicate over a UART link at a baud rate of 115200
-(Figure~\ref{fig:data-flow}).
+The MSP432 and the Raspberry Pi communicate over a UART link (Figure~\ref{fig:data-flow}).
+UART is a serial protocol that sends data one bit at a time over a single wire in each
+direction, without a shared clock. Both ends must agree in advance on the baud rate, the
+number of bits sent per second, which is 115,200\,bit/s on the Cyclops rover.
 Encoder counts travel from the MSP432 to the Raspberry Pi, and target wheel speeds travel
 in the opposite direction.
 
 \subsection{Encoder Count (MSP432 to Raspberry Pi)}
 \label{sec:uart-slot-count}
 
-Every 100\,ms, a timer interrupt on the MSP432 sends the current left and right slot
+Every 100\,ms, a timer interrupt on the MSP432 sends the current left and right encoder
 counts (Section~\ref{sec:encoder}) to the Raspberry Pi. The firmware briefly disables
 interrupts while it copies the two counts, so both values come from the same instant.
 Each count is a signed 32-bit integer and is sent in big-endian order, with the most
@@ -461,8 +460,8 @@ Table~\ref{tab:slot-count-packet} shows the resulting 10-byte packet.
     Byte & Field & Description \\
     \hline
     0     & Start    & Constant \texttt{0xAA} \\
-    1--4  & $C_L$    & Left encoder count, bits 31:0 \\
-    5--8  & $C_R$    & Right encoder count, bits 31:0 \\
+    1--4  & $C_L$    & Left encoder count \\
+    5--8  & $C_R$    & Right encoder count \\
     9     & Checksum & XOR of bytes 1--8 \\
     \hline
   \end{tabular}
@@ -477,21 +476,24 @@ bitwise XOR.
   \label{eq:uart-checksum}
 \end{equation}
 The Raspberry Pi recomputes $X$ from the received data bytes and discards the packet if
-the result does not match the received checksum.
+the result does not match the received checksum. This check detects packets corrupted
+during transmission and prevents corrupted encoder counts from reaching the localization
+pipeline.
 
 \subsection{Target Wheel Speed (Raspberry Pi to MSP432)}
 \label{sec:uart-speed}
 
 The Raspberry Pi sends the target left and right wheel speeds to the MSP432, where they
-become the setpoints $\dot{C}^*_L$ and $\dot{C}^*_R$ of the PI controller (Section~\ref{sec:PI}). Unlike the encoder count
-packet, the speed command is not sent on a fixed schedule. The Raspberry Pi sends a new
-command only when the navigation loop finishes an iteration, so the time between commands
-depends on how fast that loop runs and the navigation process (Section~\ref{sec:navigation})
+become the setpoints $\dot{C}^*_L$ and $\dot{C}^*_R$ of the PI controllers
+(Section~\ref{sec:PI}). Unlike the encoder count packet, the speed command is not sent on a
+fixed schedule. The Raspberry Pi sends a new command only when the navigation loop
+(Section~\ref{sec:navigation}) finishes an iteration, so the time between commands depends
+on how long each iteration takes.
 
-Each target speed is given in counts per second (Section~\ref{sec:control-loop}) and sent as a signed 16-bit integer in
-big-endian order. The sign gives the direction of rotation, with positive values driving
-the wheel forward. 
-Table~\ref{tab:speed-packet} shows the resulting 6-byte packet.
+Each target speed is given in counts per second (Section~\ref{sec:control-loop}) and sent as
+a signed 16-bit integer in big-endian order. The sign gives the direction of rotation, with
+positive values driving the wheel forward. Table~\ref{tab:speed-packet} shows the resulting
+6-byte packet.
 
 \begin{table}[htbp]
   \centering
@@ -503,8 +505,8 @@ Table~\ref{tab:speed-packet} shows the resulting 6-byte packet.
     Byte & Field & Description \\
     \hline
     0     & Start    & Constant \texttt{0xAA} \\
-    1--2  & $\dot{C}^*_L$ & Left target speed, bits 15:0 \\
-    3--4  & $\dot{C}^*_R$ & Right target speed, bits 15:0 \\
+    1--2  & $\dot{C}^*_L$ & Left target speed\\
+    3--4  & $\dot{C}^*_R$ & Right target speed\\
     5     & Checksum & XOR of bytes 1--4 \\
     \hline
   \end{tabular}
@@ -518,7 +520,7 @@ packet.
   X = b_1 \oplus b_2 \oplus b_3 \oplus b_4
   \label{eq:uart-speed-checksum}
 \end{equation}
-The MSP432 recomputes $X$ from the received data bytes and discards the packet if the
+Like the Raspberry Pi, the MSP432 recomputes $X$ from the received data bytes and discards the packet if the
 result does not match the received checksum. When a packet is discarded, both setpoints are
 set to zero, stopping the rover until the next valid command arrives.
 
@@ -527,18 +529,20 @@ set to zero, stopping the rover until the next valid command arrives.
 
 The MKTechnic USB camera uses a wide-angle fisheye lens. The wide lens lets the rover see
 more of the scene in front of it, but it also distorts straight lines in the image, most
-visibly near the edges of the frame. The monocular depth estimation models used in this
-thesis (Chapter~\ref{ch:mde}) are trained mostly on images taken with ordinary pinhole
- cameras~\cite{virtualkitti2,hypersim}, and the conversion from depth to range in
-Section~\ref{sec:mde-to-range} assumes the same pinhole geometry. For this reason, every
-captured frame is undistorted into an equivalent pinhole image before
-it is passed to the depth model, using OpenCV's \texttt{cv2.fisheye.undistortImage}
-function~\red{[]}.
+visibly near the edges of the frame. This is a problem for two reasons. First,
+the monocular depth estimation models used in this thesis (Chapter~\ref{ch:mde}) are
+trained mostly on images taken with ordinary pinhole cameras~\cite{virtualkitti2,hypersim}.
+Second, the conversion from depth to range in Section~\ref{sec:mde-to-range} assumes
+pinhole geometry. Every captured frame is therefore converted into an equivalent pinhole
+image before it is passed to the depth model.
 
-
-Equation~\ref{eq:intrinsics} defines the intrinsic matrix $K$, where $f_x$ and $f_y$ are the
-focal lengths in pixels and $(c_x, c_y)$ is the principal point, the pixel where the optical
-axis meets the image plane.
+In the pinhole model, every light ray from the scene passes through a single point, the
+optical center, and lands on a flat image plane. As a result, straight lines in the scene
+remain straight in the image~\cite{Forsyth_Ponce_CV}. The intrinsic matrix $K$ describes
+how a pinhole camera maps a point in the camera frame to a pixel.
+Equation~\ref{eq:intrinsics} defines $K$, where $f_x$ and $f_y$ are the focal lengths in
+pixels and $(c_x, c_y)$ is the principal point, the pixel where the optical axis meets the
+image plane.
 \begin{equation}
   K = \begin{bmatrix}
         f_x & 0   & c_x \\
@@ -547,23 +551,22 @@ axis meets the image plane.
       \end{bmatrix}
   \label{eq:intrinsics}
 \end{equation}
-Because every ray passes through the same point and lands on a flat plane, the pinhole model
-maps straight lines in the scene to straight lines in the image.
-
-
-
 
 To convert fisheye frames into pinhole frames, the intrinsic matrix $K$ and the distortion
-coefficients $k_1, \dots, k_4$ of the camera must first be known. These were found with the
-standard checkerboard calibration method~\cite{zhang2000flexible}. A printed checkerboard with
-6x8 inner corners and 23mm squares was photographed by the
-rover's camera from 18 different positions and angles, making sure the board appeared
-near the edges of the frame as well as near the center, since the edges are where the
-distortion is strongest. Because the board is flat and its square size is known, the
-position of every corner on the board is known exactly. The corners were then located in each
-image with OpenCV's cv2.fisheye.calibrate~\cite{opencv_library}.
-Figure~\ref{fig:checkerboard-calib} shows a few calibration images.
-Table~\ref{tab:camera-intrinsics} lists the resulting parameters.
+coefficients $k_1, \dots, k_4$ of the camera must first be known. The distortion
+coefficients belong to OpenCV's fisheye camera model and describe how strongly the lens
+bends each incoming ray as a function of its angle from the optical
+axis~\cite{opencv_library}. Both $K$ and $k_1, \dots, k_4$ were found with the standard
+checkerboard calibration method~\cite{zhang2000flexible}. A printed checkerboard with
+$6 \times 8$ inner corners and 23\,mm squares was photographed by the rover's camera from
+18 different positions and angles. The board was placed near the edges of the frame as well
+as near the center, because distortion is strongest at the edges. Since the board is flat
+and its square size is known, the position of every corner on the board is known exactly.
+The corners were located in each image with OpenCV's
+\texttt{cv2.\allowbreak findChessboardCorners} function. Then $K$ and $k_1, \dots, k_4$ were
+then estimated from these corners with \texttt{cv2.\allowbreak fisheye.\allowbreak
+calibrate}~\cite{opencv_library}. Figure~\ref{fig:checkerboard-calib} shows a few
+calibration images, and Table~\ref{tab:camera-intrinsics} lists the resulting parameters.
 
 \begin{figure}[htbp]
   \centering
@@ -571,8 +574,6 @@ Table~\ref{tab:camera-intrinsics} lists the resulting parameters.
   \caption{Example checkerboard images used to calibrate the rover's camera.}
   \label{fig:checkerboard-calib}
 \end{figure}
-
-
 
 \begin{table}[htbp]
   \centering
@@ -592,9 +593,10 @@ Table~\ref{tab:camera-intrinsics} lists the resulting parameters.
 \end{table}
 
 Each captured frame is converted to a pinhole image with OpenCV's
-\texttt{cv2.\allowbreak fisheye.\allowbreak undistortImage} function~\cite{opencv_library}. Some content near the
-corners of the fisheye image falls outside the pinhole image and is cropped. The pinhole image is then passed to the
-monocular depth estimation model (Chapter~\ref{ch:mde}).
+\texttt{cv2.\allowbreak fisheye.\allowbreak undistortImage} function~\cite{opencv_library}.
+Some content near the corners of the fisheye image falls outside the pinhole image and is
+cropped. The pinhole image is then passed to the monocular depth estimation model
+(Chapter~\ref{ch:mde}).
 Figure~\ref{fig:fisheye-vs-pinhole} shows a frame before and after this conversion.
 
 \begin{figure}[htbp]

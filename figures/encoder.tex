@@ -1,0 +1,72 @@
+% Optical incremental encoder: slotted disk, LED, photodetector, and output.
+%
+% (a) Front view of the slotted disk on the motor shaft. Only 24 slots are
+%     drawn for legibility (the TI-RSLK disk has N = 360). The dashed circle
+%     marks where the light beam passes through the disk.
+% (b) Cross-section through the sensing position: the LED on one side of the
+%     disk, the photodetector on the other, light passing through a slot.
+% (c) Photodetector output as the disk turns: high when a slot is aligned with
+%     the beam, low when the disk blocks it -- one pulse per slot.
+% Pure vector TikZ (no opacity/shadings) so it survives the latex -> dvipdf build.
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize,
+    disk/.style={fill=black!20, draw=black, line width=0.6pt},
+    part/.style={draw=black, fill=white, line width=0.6pt, minimum width=0.9cm,
+                 minimum height=0.5cm, inner sep=1pt},
+    beam/.style={->, line width=0.9pt, black},
+    sig/.style={line width=0.9pt, black},
+    ax/.style={->, black!60, line width=0.4pt}]
+  \def\R{1.6}     % disk radius (cm)
+  \def\ri{1.15}   % slot inner radius
+  \def\ro{1.45}   % slot outer radius
+  \def\sw{0.07}   % slot half-width
+
+  % ---------------- (a) front view ----------------
+  \begin{scope}
+    \draw[disk] (0,0) circle (\R);
+    \foreach \a in {0,15,...,345} {
+      \filldraw[fill=white, draw=black, line width=0.4pt, rotate=\a]
+        (\ri,-\sw) rectangle (\ro,\sw);
+    }
+    \filldraw[fill=black!60, draw=black] (0,0) circle (0.22);
+    \node[below=1pt, font=\scriptsize] at (0,-0.22) {shaft};
+    % sensing position (top slot)
+    \draw[dashed, line width=0.6pt] (0,{(\ri+\ro)/2}) circle (0.28);
+    \draw[<-, black!70] (0.28,{(\ri+\ro)/2+0.1}) -- (1.3,2.15)
+      node[right, align=left] {light path};
+    % direction of rotation
+    \draw[->, line width=0.6pt] (-140:\R+0.25) arc (-140:-50:\R+0.25);
+    \node[below] at (0,-\R-0.35) {(a) Slotted disk, front view};
+  \end{scope}
+
+  % ---------------- (b) cross-section ----------------
+  \begin{scope}[xshift=5.4cm]
+    % shaft
+    \filldraw[fill=black!60, draw=black] (-0.9,-0.12) rectangle (0.9,0.12);
+    % disk cut through the sensing slot: solid except at the slot
+    \filldraw[disk] (-0.08,-\R) rectangle (0.08,\ri);
+    \filldraw[disk] (-0.08,\ro) rectangle (0.08,\R);
+    % LED and photodetector on either side of the slot
+    \node[part] (led) at (-1.5,{(\ri+\ro)/2}) {LED};
+    \node[part, minimum width=1.6cm] (pd) at (1.9,{(\ri+\ro)/2}) {Photodetector};
+    \draw[beam] (led.east) -- (pd.west);
+    \node[above, font=\scriptsize] at (-0.55,{(\ri+\ro)/2+0.02}) {light};
+    \node[right, align=left, font=\scriptsize] at (0.15,0.65) {disk};
+    \node[below] at (0.2,-\R-0.35) {(b) Cross-section at the sensing position};
+  \end{scope}
+
+  % ---------------- (c) photodetector output ----------------
+  \begin{scope}[yshift=-4.4cm, xshift=-0.3cm]
+    \def\T{1.05}  % one slot period (cm)
+    \def\h{0.8}   % high level (cm)
+    \draw[ax] (0,0) -- (6*\T+0.5,0) node[right] {$t$};
+    \draw[ax] (0,0) -- (0,\h+0.45);
+    \node[left] at (0,\h) {High};
+    \node[left] at (0,0) {Low};
+    \foreach \k in {0,...,5} {
+      \draw[sig] (\k*\T,0) -- (\k*\T,\h) -- (\k*\T+0.5*\T,\h)
+                 -- (\k*\T+0.5*\T,0) -- (\k*\T+\T,0);
+    }
+    \draw[<->, black!70] (\T,\h+0.25) -- node[above] {one slot} (2*\T,\h+0.25);
+    \node[below] at (3*\T,-0.35) {(c) Photodetector output as the disk turns};
+  \end{scope}
+\end{tikzpicture}
