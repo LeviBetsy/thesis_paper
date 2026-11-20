@@ -198,8 +198,8 @@
 
 % Add "Page" as column title to Table of Contents, List of Figures,
 % List of Tables, and List of Algorithms
-\addtocontents{toc}{{\protect\flushright Page\par}}
-\addtocontents{lof}{{\protect\flushright Page\par}}
+% \addtocontents{toc}{{\protect\flushright Page\par}}  % removed: TOC has no "Page" header
+% \addtocontents{lof}{{\protect\flushright Page\par}}  % removed: LoF has no "Page" header
 \addtocontents{lot}{{\protect\flushright Page\par}}
 \addtocontents{loa}{{\protect\flushright Page\par}}
 

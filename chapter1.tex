@@ -1,7 +1,8 @@
 \chapter{Introduction}
+\label{ch:intro}
 \setlength\parindent{24pt}
 
-CHANGE MOST VERB TO PAST TENSE
+  \red{CHANGE MOST VERB TO PAST TENSE}
 
 Add both github here and check Valvano copyright excerpt on all 
 % This is an example using the template \cite{uci-thesis-latex}. 
@@ -18,9 +19,130 @@ Add both github here and check Valvano copyright excerpt on all
 %   \label{fig:sourcecode}
 % \end{figure}
 
+A mobile robot that moves through a building has to know where it is. It needs this to plan a
+path to a goal, to avoid the walls and objects around it, and to know when it has arrived. Wheel
+encoders tell the robot how far it has moved, but their small errors add up as it drives, so the
+robot must also observe its surroundings and compare what it sees with a map. This process is
+called localization~\cite{thrun2005probabilistic}.
+
+Most robots that localize this way measure the distance to their surroundings with a dedicated
+range sensor, such as a planar LiDAR or a ring of ultrasonic sensors
+(Chapter~\ref{ch:lit-review}). These sensors work well, but each one adds cost, weight, and power
+draw, and each is a second sensor alongside the camera that most robots already carry. On a
+small, battery-powered robot, that overhead is hard to justify.
+
+A camera is cheap, light, and draws little power, but a single image does not directly say how
+far away anything is. Monocular depth estimation (MDE) addresses this by predicting a depth value
+for every pixel of a single image with a neural network. Recent MDE models built on the vision
+transformer (ViT)~\cite{ViT}, such as Depth Anything V2~\cite{DepthAnythingV2}, produce detailed
+depth maps even for scenes they were never trained on. If such a model is accurate enough, one
+camera could serve as both the robot's eyes and its range sensor.
+
+This thesis asks whether that is the case: \emph{is monocular depth estimation good enough to
+replace a dedicated range sensor for robot localization?} To answer it, we built the Cyclops
+rover, a small wheeled robot whose only view of its surroundings is a single front-mounted
+camera, and used the depth predicted from that camera to localize the rover in a known map.
+
 \section{Background}
 
-Intro on what our robot does
+The Cyclops rover is built on the TI-RSLK chassis~\cite{ti_rslk_max} and carries a single
+front-mounted USB camera, a Raspberry Pi~5, and an MSP432 microcontroller
+(Chapter~\ref{ch:embedded}). Its task is to drive to a goal picked on a map of its environment,
+which it does by repeating the same loop. The Raspberry Pi captures a camera frame and sends it to
+an off-board laptop, which runs Depth Anything V2 to predict a depth map. The predicted depth is
+calibrated to meters using points on the floor directly in front of the rover, and is then reduced
+to a range scan: a list of distances to the nearest obstacle in each direction, the same form of
+measurement that a planar LiDAR produces (Chapter~\ref{ch:mde}). Back on the Raspberry Pi, Monte
+Carlo localization (MCL) combines this range scan with the wheel encoder counts to estimate the
+rover's position and heading in the map, and a path planner uses that estimate to send target
+wheel speeds to the MSP432 (Chapter~\ref{ch:localization}). The MSP432 then holds each wheel at its
+target speed with a closed-loop controller.
+
+Because the range scan has the same form as a LiDAR scan, the localization itself follows standard
+methods~\cite{thrun2005probabilistic}. What changes is the sensor: the measurement model of MCL now
+has to work with ranges predicted by a neural network instead of ranges measured by a laser.
+
+\section{Research Question}
+\label{sec:research-question}
+
+The central question of this thesis is whether monocular depth estimation is good enough to serve
+as the range sensor for robot localization. The answer is not obvious, because a range scan
+predicted from a single image differs from a LiDAR scan in several ways.
+
+\begin{itemize}
+  \item \textbf{Unknown scale.} A single image cannot distinguish a small object nearby from a
+  large object far away, so most MDE models predict only relative depth, which is correct in
+  ordering but not in meters (Section~\ref{sec:relative-depth}). Localization needs ranges in
+  meters, so the scale must be recovered from somewhere else.
+
+  \item \textbf{Larger error.} A LiDAR measures each range directly, with an error of a few
+  centimeters or less~\red{[]}. An MDE range is a prediction, and its error is much larger and
+  depends on the scene.
+
+  \item \textbf{Correlated error.} Every ray of an MDE range scan is cut from the same depth map,
+  predicted by the same network in a single pass, so one mistake, such as a poorly estimated
+  scale, can shift many rays at once.
+
+  \item \textbf{Narrow field of view and short range.} A planar LiDAR typically sees all the way
+  around the robot and out to several meters~\red{[]}. A single forward-facing camera sees only
+  what is in front of it, and MDE becomes unreliable at longer distances, so the Cyclops rover
+  uses ranges only up to $0.40$~m.
+
+  \item \textbf{Low update rate.} Predicting depth takes far longer than a LiDAR sweep. On the
+  Cyclops rover, a new range scan arrives about three times per second, and only after the camera
+  frame has made a round trip to the laptop.
+\end{itemize}
+
+Each of these differences makes the measurement less informative, and localization relies on the
+measurement to correct the drift of wheel odometry. This thesis tests whether, despite these
+differences, an MDE range scan carries enough information for the rover to localize itself and
+navigate. The question is broken into three parts:
+\begin{enumerate}
+  \item Can the relative depth predicted by Depth Anything V2 be converted into metric depth on a
+  small rover, without any additional sensor?
+  \item Can that metric depth be turned into a range scan that a standard range-based measurement
+  model can use without modification?
+  \item Does Monte Carlo localization with this range scan estimate the rover's pose accurately
+  enough for the rover to drive to a goal?
+\end{enumerate}
+
+\section{Contributions}
+\label{sec:contributions}
+
+The main contributions of this thesis are:
+\begin{itemize}
+  \item A method that converts the relative disparity of Depth Anything V2 into metric depth on
+  every frame, by fitting its unknown scale and shift to points on the floor whose depth is known
+  from the camera's fixed mounting (Section~\ref{sec:metric-scale}).
+
+  \item A pipeline that turns the metric depth map into a planar range scan, by back-projecting it
+  into a 3D point cloud, removing the floor, and keeping the nearest obstacle in each direction
+  (Section~\ref{sec:mde-to-range}).
+
+  \item A Monte Carlo localization system that uses this MDE range scan as its measurement, with a
+  beam measurement model whose ray casting matches the geometry of the camera
+  (Chapter~\ref{ch:localization}).
+
+  \item The Cyclops rover itself: a low-cost, battery-powered robot that combines these parts with
+  wheel odometry and path planning to drive to a goal using a single camera
+  (Chapters~\ref{ch:embedded} and~\ref{ch:localization}).
+
+  \item An evaluation of the full system on the rover, which compares the path estimated by MCL
+  against the true path recorded by an overhead camera and measures how often the rover reaches
+  its goal (Chapter~\ref{ch:results}).
+\end{itemize}
+
+\section{Thesis Outline}
+\label{sec:outline}
+
+The rest of this thesis is organized as follows. Chapter~\ref{ch:lit-review} reviews prior work on
+range sensing, monocular depth estimation, and localization. Chapter~\ref{ch:embedded} describes
+the hardware and low-level software of the Cyclops rover. Chapter~\ref{ch:mde} explains how depth
+is predicted from a single image, calibrated to meters, and turned into a range scan.
+Chapter~\ref{ch:localization} describes the Monte Carlo localization and path planning built on
+that range scan. Chapter~\ref{ch:results} presents the experimental results,
+Chapter~\ref{ch:future-work} lists directions for future work, and Chapter~\ref{ch:conclusion}
+answers the research question.
 
 \section{Terms}
 \label{sec:terms}

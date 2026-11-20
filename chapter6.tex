@@ -1,13 +1,68 @@
 \chapter{Result}
 \label{ch:results}
 
+\section{Latency and Loop Rates}
+\label{sec:results-latency}
+
+\red{Promised in Chapter~\ref{ch:embedded} (System Architecture) and Section~\ref{sec:DAV2}.
+Report: loop rate table (PI controller every 10\,ms, slot count packets every 100\,ms, MDE
+range scan and MCL update at about 3\,Hz, navigation loop); DAv2-Small inference speed on the
+Raspberry Pi 5 versus the laptop, which justifies offloading depth to the laptop; optionally
+the extra $\sim$100\,ms of the metric DAv2 models (Section~\ref{sec:depth-calibration}).}
+
 Loop rate table report
 
 Inference speed of model on embedded software 
 thus moving to laptop
 
 
-We found that the minimum range for the particle is a significant drawback of the robot, 
+\section{Wheel Speed Step Response}
+\label{sec:results-step-response}
+
+\red{Promised in Section~\ref{sec:PI}. Report: measured speed $\Delta C[k]$ versus time for a
+step from zero to a constant target, for each wheel, with rise time, percent overshoot $M_p$
+(Equation~\ref{eq:overshoot}), settling time ($\pm 2\%$), and steady-state error.}
+
+\section{Monocular Depth Accuracy}
+\label{sec:results-depth}
+
+\red{Placeholder currently at the end of the Back-Projection to 3D subsection
+(Section~\ref{sec:mde-to-range}). Report: per-placement error between checkerboard corners
+back-projected from MDE depth and their \texttt{solvePnP} positions, at several distances and
+lateral offsets (table or figure).}
+
+\section{Measurement Model Weights}
+\label{sec:results-meas-model}
+
+\red{Placeholder currently in Section~\ref{sec:meas-test}. Report: weight maps for each test
+case in Table~\ref{tab:meas-tests} (Figure~\ref{fig:meas-test}) and what each case shows about
+the sensitivity of the weights to $x$, $y$, and $\theta$. Also the note there about needing a
+minimum range and an occupancy value of 0.8.}
+
+\section{Localization in Simulation}
+\label{sec:results-simulation}
+
+\red{Promised in Section~\ref{sec:simulation}. Report: pose error over time between the MCL
+mean pose and the virtual rover's true pose, using the noise-free scan.}
+
+\section{Localization Accuracy on the Rover}
+\label{sec:results-localization}
+
+\red{Promised in Section~\ref{sec:navigation}. Report: true path extracted from the overhead
+tripod camera versus the MCL path (sequence of mean poses), which tests MDE and MCL as one
+system. Path comparison figure plus a position and heading error summary.}
+
+\section{Navigation Success Rate}
+\label{sec:results-navigation}
+
+\red{Promised in Section~\ref{sec:navigation}. Report: number of successful trials out of
+$10$, where a success means the rover stops within $5$~cm of the goal, as measured by the
+tripod camera.}
+
+\section{Observed Limitations}
+\label{sec:results-limitations}
+
+We found that the minimum range for the particle is a significant drawback of the robot,
 since smaller scene give an almost dense map with barely placeable particles. Thus for
 diverse tests we have to settle with more spacious scenes. We can mitigate this with the 
 abolishing of checkerboard and using pure coordinate transform to get z depth at the closest

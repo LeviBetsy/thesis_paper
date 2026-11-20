@@ -1,30 +1,162 @@
 \chapter{Literature Review}
-\section{Robot Perception}
-\section{Robot Localization}
-\section{Depth Estimation}
+\label{ch:lit-review}
 
-Lidar, stereo extc however limited range and expense \red{midas paper}
-Early work on monocular depth estimation used MRFbased formulations [3], simple geometric assumptions [2], or non-parametric methods [14] [midas paper]
+This chapter reviews the prior work that the Cyclops rover builds on and places this thesis
+within it. Section~\ref{sec:rw-range} reviews the sensors that mobile robots conventionally use to
+measure distance, and why they are hard to justify on a small, battery-powered platform.
+Section~\ref{sec:rw-mde} traces the development of monocular depth estimation from hand-crafted
+cues to the transformer-based models used in this work. Section~\ref{sec:rw-loc} reviews
+localization with range sensors. Section~\ref{sec:rw-mde-nav} reviews work that uses monocular
+depth in place of a range sensor for robot navigation, including the work most closely related to
+this thesis, and Section~\ref{sec:rw-summary} summarizes how the Cyclops rover differs from it.
 
-Early approaches to MDE relied on hand-crafted geometric cues and probabilistic graphical models,
-such as Markov random fields, to infer depth from superpixel features
-\todo{cite classical MDE work, e.g. Saxena et al.}. The advent of deep learning shifted the field
-toward end-to-end CNN regression, where an encoder-decoder network is trained to directly
-predict a dense depth map from an RGB input, supervised by ground-truth depth from LiDAR
-or stereo datasets \todo{cite Eigen et al. and follow-up encoder-decoder work}. More recently,
-vision transformer (ViT) backbones have been shown to outperform convolutional architectures
-on this task, since the global self-attention mechanism of a transformer captures long-range
-spatial context that is useful for resolving scale ambiguity, whereas CNNs are inherently
-biased toward local receptive fields \todo{cite DPT / MiDaS or similar ViT-based depth work}.
+\section{Range Sensing on Small Mobile Robots}
+\label{sec:rw-range}
 
-A second axis along which this literature divides is whether a model is trained to generalize
-across scenes at all. Models fine-tuned on a single dataset with fixed camera intrinsics, such
-as NYU Depth v2 or KITTI, can be trained to regress depth in meters, but transfer poorly beyond
-the domain they were fitted to. zero shot cross dataset transformer
- Zero-shot models instead train on a mixture of heterogeneous
-sources and trade metric output for breadth of generalization
-\todo{cite MiDaS, Depth Anything}. Chapter~\ref{ch:mde} takes up the consequences of that
-trade-off for the Cyclops rover.
+Mobile robots have traditionally measured the distance to their surroundings with a dedicated
+range sensor. Early indoor robots used rings of ultrasonic sonar sensors, which are inexpensive but
+have wide beams, so a single reading only places an obstacle somewhere within a
+cone~\cite{Moravec_Sonar}. Planar LiDAR sweeps a laser across the scene and returns accurate ranges
+at a fine angular resolution~\cite{kawata2005urg}, and it became the standard sensor for indoor
+localization and mapping~\cite{thrun2005probabilistic, hess2016cartographer}. 
+Dense depth images can be obtained from time-of-flight cameras~\cite{ToF}, from structured-light
+RGB-D cameras such as the Microsoft Kinect~\cite{rgbd}, or from a pair of calibrated cameras that
+triangulate depth from the disparity between matched pixels (stereo cameras)~\cite{stereo}.
+
+Each of these sensors adds cost, weight, and power draw, and each is a second sensor alongside the
+camera that most robots already carry for scene understanding. On a small, battery-powered
+platform such as the Cyclops rover, that overhead is hard to justify. This motivates the use of a
+single camera for both scene understanding and range sensing, which requires recovering depth from
+a single image.
+
+\section{Monocular Depth Estimation}
+\label{sec:rw-mde}
+
+Monocular depth estimation (MDE) recovers a dense depth map from a single RGB image. Early work
+used Markov random fields over image superpixels~\cite{Saxena2009Make3D}, simple geometric
+assumptions about the layout of the scene~\cite{Hoiem2005PopUp}, or non-parametric methods that
+transfer depth from similar images in a database~\cite{Karsch2014DepthTransfer}. % \red{[]}s, in order: Saxena et al., Make3D (TPAMI 2009); Hoiem et al., Automatic Photo Pop-up (SIGGRAPH 2005); Karsch et al., Depth Transfer (TPAMI 2014). All three are cited in the related work of the MiDaS paper.
+Eigen et al.~\cite{Eigen} showed that a deep convolutional network could instead be trained end to
+end to predict a depth map directly from the image, supervised by ground-truth depth from RGB-D
+and LiDAR datasets such as NYU Depth v2~\cite{NYUD} and KITTI~\cite{kitti}. % \red{[]}: Geiger et al., "Are we ready for autonomous driving? The KITTI vision benchmark suite" (CVPR 2012)
+Convolutional encoder--decoder networks dominated the field in the years that
+followed~\cite{MiDaS}. % \red{[]}: an MDE survey, e.g. Ming et al., "Deep learning for monocular depth estimation: A review" (Neurocomputing 2021)
+Ranftl et al.~\cite{DPT} later replaced the convolutional encoder with a vision transformer
+(ViT)~\cite{ViT}, the resulting model, DPT, produced
+finer-grained and more globally coherent depth maps than fully convolutional
+networks~\cite{DPT}.
+
+Beyond network architecture, MDE models also differ in what kind of depth they output: metric
+depth in meters, or relative depth that is correct only up to an unknown scale and shift.
+Predicting relative depth allows a model to learn from many datasets at once, even when their
+depth labels do not share a common scale. Ranftl et al.~\cite{MiDaS} used this to train MiDaS on
+a mixture of heterogeneous datasets, with a loss that ignores the unknown scale and shift of each
+image's depth. The model gave up metric output in exchange for zero-shot transfer to scenes it had
+never seen. Depth Anything V2~\cite{DepthAnythingV2}, the model used in this thesis, keeps this
+relative formulation with a DINOv2~\cite{DINOv2} pretrained ViT encoder and a DPT decoder, and is
+trained first on synthetic images and then on a large set of pseudo-labeled real images. Other
+models have tried to recover metric depth without giving up generalization, either by adding
+metric heads fine-tuned on in-domain data~\cite{zoedepth} or by learning metric scale together with
+scene geometry from very large training sets~\cite{MoGe}. Chapter~\ref{ch:mde} explains why the
+Cyclops rover uses a relative model instead, and recovers metric scale from its own geometry.
+
+\section{Localization with Range Sensors}
+\label{sec:rw-loc}
+
+Localization and mapping are two related but distinct problems. Localization asks where the robot
+is, given a map of the environment that is already known; mapping asks what the environment looks
+like, given that the robot's poses are already known~\cite{thrun2005probabilistic}. Simultaneous
+localization and mapping (SLAM) removes both assumptions and estimates the map and the robot's pose
+together, as the robot explores an environment it has never seen~\cite{durrantwhyte2006slam}. % \red{[]}: e.g. Durrant-Whyte and Bailey, "Simultaneous localization and mapping: Part I" (IEEE RAM 2006)
+This thesis addresses localization only: the map of the environment is assumed to be given.
+
+Localization estimates a robot's pose within a map from how it has moved and what its sensors
+observe~\cite{thrun2005probabilistic}. Monte Carlo localization (MCL), introduced by Dellaert et
+al.~\cite{dellaert1999monte}, represents the robot's belief about its pose with a set of weighted samples, or
+particles, and updates them with a particle filter. % \red{[]}: Dellaert, Fox, Burgard, Thrun, "Monte Carlo Localization for Mobile Robots" (ICRA 1999)
+Because a particle set can represent a belief with several peaks, MCL can localize a robot whose
+starting pose is unknown, which a Kalman filter tracking a single Gaussian
+cannot~\cite{thrun2005probabilistic}. MCL is usually paired with sonar or LiDAR: the measured ranges
+are compared against the ranges that would be seen from each particle's pose in the map, using a
+beam or likelihood-field measurement model~\cite{thrun2005probabilistic}. Its adaptive variant,
+AMCL~\cite{Fox2003KLD}, is the default localization method in the ROS~2 navigation stack~\cite{Macenski2020Marathon2} and is
+widely used on LiDAR-equipped indoor robots. % \red{[]}s, in order: Fox, "KLD-Sampling: Adaptive Particle Filters" (NeurIPS 2001); Macenski et al., "The Marathon 2: A Navigation System" (IROS 2020)
+
+Cameras have also been used for localization, by matching image features or appearance against a
+visual map of the environment~\cite{dellaert1999condensation}. % \red{[]}: e.g. Dellaert, Burgard, Fox, Thrun, "Using the CONDENSATION algorithm for robust, vision-based mobile robot localization" (CVPR 1999)
+These approaches need a map of how the environment looks, rather than of its geometry. Monocular
+depth estimation offers a third option: a camera can produce a range scan that is used by the
+standard range-based measurement model without modification, so the map only has to describe the
+geometry of the environment. Chapter~\ref{ch:localization} takes this approach.
+
+\section{Monocular Depth for Robot Navigation}
+\label{sec:rw-mde-nav}
+
+Once a depth map has been predicted, it can be back-projected into a 3D point cloud, so that
+algorithms written for LiDAR can consume camera data unchanged. Wang et al.~\cite{wang2019pseudo} called this
+representation \emph{pseudo-LiDAR}, and showed that it substantially narrowed the gap between
+camera-only and LiDAR-based 3D object detection for autonomous driving. % \red{[]}: Wang et al., "Pseudo-LiDAR from Visual Depth Estimation: Bridging the Gap in 3D Object Detection for Autonomous Driving" (CVPR 2019)
+Section~\ref{sec:mde-to-range} applies the same idea to a small ground robot, reducing the point
+cloud to a planar range scan. Other work skips the explicit depth estimate and trains a network to
+map camera images directly to steering commands~\cite{bojarski2016end}. This avoids calibrating depth, but it
+does not give the robot a metric model of its surroundings that a planner or localizer can
+use. % \red{[]}: e.g. Bojarski et al., "End to End Learning for Self-Driving Cars" (arXiv 2016); the CNN maze-navigation paper in ../paper/ may also fit here
+
+The work most closely related to this thesis is that of Louw et al.~\cite{practical}, who evaluated Depth Anything V2 [30] as a replacement for LiDAR in the navigation of a differential-drive robot.
+They ran the largest (335.3M-parameter) indoor metric variant of DAv2 without fine-tuning at 12 Hz on an Intel i9 CPU with an NVIDIA RTX A4000 GPU.
+Because the predicted depth still showed a consistent scale offset, they multiplied it by a constant factor tuned by hand to align the MDE point cloud with obstacle positions measured by the robot’s LiDAR.
+The resulting point cloud fed a voxel-layer costmap in the ROS 2 navigation stack (Nav2), which used it for local obstacle avoidance, while the robot’s pose came from wheel odometry alone.
+The robot completed three obstacle courses without collision in every trial, with travel distances and replanning comparable to a LiDAR baseline.
+However, MDE placed distant obstacles too close (about 2.2 m for an obstacle at 3 m), so only obstacles within 2 m were used for planning.
+
+This thesis differs from that work in three ways.
+First, in what the depth is used for: Louw et al. used MDE only to detect obstacles near the robot and did not use it for mapping or localization.
+On the Cyclops rover, the depth-derived range scan is the measurement of Monte Carlo localization in a known map (Chapter 5), so the camera, rather than a LiDAR, corrects the drift of wheel odometry.
+Second, in how metric scale is recovered: rather than applying one scale factor tuned against a LiDAR, the Cyclops rover uses the relative model and re-estimates both the scale and the shift of 
+its disparity on every frame from ground points directly in front of it (Section 4.3.3).
+No second range sensor is needed at any stage.
+Louw et al. themselves proposed ground-plane-based depth scaling as future work.
+Third, in platform: the Cyclops rover runs DAv2-Small, about 13 times smaller, on a low-cost battery-powered robot whose only sensor besides the wheel encoders is the camera (Chapter 3).
+
+\section{Summary}
+\label{sec:rw-summary}
+
+Table~\ref{tab:rw-comparison} compares the Cyclops rover with the work of Louw et
+al.~\cite{practical} and with a conventional LiDAR-equipped robot running AMCL.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption[Comparison with related work]{Comparison of the Cyclops rover with a conventional
+    LiDAR-based robot and with the most closely related monocular depth work.}
+  \label{tab:rw-comparison}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm}
+      >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X
+      >{\raggedright\arraybackslash}X}
+    \hline
+    & \textbf{LiDAR + AMCL robot} & \textbf{Louw et al.~\cite{practical}} & \textbf{Cyclops rover (this thesis)} \\
+    \hline
+    Range sensor       & Planar LiDAR                & Single camera (LiDAR used to tune scale) & Single camera \\
+    Depth model        & ---                         & DAv2-Large, indoor metric (335.3M parameters) & DAv2-Small, relative \\
+    Metric scale       & Measured directly           & Constant factor, hand-tuned against LiDAR & Scale and shift re-fit on every frame to ground points \\
+    Use of range data  & Localization and obstacle avoidance & Local obstacle avoidance (obstacles within 2~m) & Measurement model for MCL in a known map \\
+    Pose estimate      & AMCL with LiDAR             & Wheel odometry only           & MCL with camera-derived range scan \\
+    Compute            & Onboard computer            & Intel i9 CPU, NVIDIA RTX A4000 GPU & Laptop, Raspberry Pi, MSP432 \\
+    Software stack     & ROS~2 navigation stack      & ROS~2 navigation stack (Nav2) & Custom \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+The Cyclops rover and the robot of Louw et al.~\cite{practical} both replace a LiDAR with a single
+camera running Depth Anything V2, but they ask different things of it. Louw et al. used a large
+metric model on a desktop-class GPU to detect nearby obstacles, with a scale factor tuned once
+against a LiDAR and a pose that came from wheel odometry alone. The Cyclops rover uses a small
+relative model on low-cost hardware, recovers metric scale on every frame from the ground in front
+of it, and uses the resulting range scan in the role that a LiDAR scan plays for AMCL: as the
+measurement that corrects odometry drift in Monte Carlo localization. This closes the loop between
+monocular depth and localization, which Louw et al. left open, without a second range sensor at any
+stage. Chapter~\ref{ch:mde} describes the depth pipeline, and Chapter~\ref{ch:localization} the
+localization built on it.
 
 %%% Local Variables: ***
 %%% mode: latex ***

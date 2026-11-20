@@ -27,7 +27,7 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc}
 \usepackage{todonotes}
-\usepackage{natbib}
+\usepackage[numbers]{natbib}  % numeric [1] citations, matches abbrv style
 \usepackage{relsize}
 \usepackage[titletoc]{appendix}
 
@@ -106,9 +106,14 @@
 \begin{document}
 
 % Trinity University honors thesis cover page (edit fields in coverpage.tex)
+% NOTE: the cover pages are coverpage.tex AND agreement.tex (the
+% "I grant Trinity University..." page). Anything that goes "after the
+% cover page" (e.g. the abstract) must come after agreement.tex.
 \input{coverpage}
 \input{agreement}
-\setcounter{page}{1}
+\input{abstractpage}
+\input{thesistitle}
+\input{tocpage}  % also restarts page numbering at 1
 
 % % UNCOMMENT THIS FOR PRELIMINARY PAGES
 % % Preliminary pages are always loaded (TOC, CV, etc.)

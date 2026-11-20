@@ -1,0 +1,23 @@
+% Table of contents (follows the title page).
+% ucithesis.cls renames this to a centered "TABLE OF CONTENTS"; restore the
+% standard left-aligned "Contents" heading locally.
+
+\clearpage
+\pagenumbering{gobble}  % no page numbers on the contents pages
+\begingroup
+  \renewcommand{\contentsname}{Contents}
+  \tableofcontents
+\endgroup
+\clearpage
+% List of figures, same left-aligned style ("List of Figures")
+\begingroup
+  \renewcommand{\listfigurename}{List of Figures}
+  \listoffigures
+\endgroup
+\clearpage
+\pagenumbering{arabic}  % chapter 1 starts at page 1
+
+%%% Local Variables: ***
+%%% mode: latex ***
+%%% TeX-master: "thesis.tex" ***
+%%% End: ***

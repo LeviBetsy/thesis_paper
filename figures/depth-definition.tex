@@ -1,6 +1,7 @@
 % Definition of depth z(u,v) in the metric depth map Z -- 3D view.
 %
-% The camera sits above the floor and looks forward along its optical axis.
+% The camera sits above the floor, pitched down towards it (about 30 deg),
+% and looks along its optical axis.
 % A scene point P lies on the floor, below and to the side of the camera.
 % The depth of P is its distance measured along the optical axis (the Z
 % coordinate in the camera frame), NOT the Euclidean distance along the ray
@@ -13,69 +14,95 @@
 % opacity, shadings or fadings here: the Makefile builds via
 % latex -> dvips -> dvipdf, where those features are unreliable.
 %
-% Coordinates are (forward, lateral, up):
-%   forward = along the optical axis (receding into the page),
-%   lateral = sideways to the camera's right, up = vertical.
-%   Camera centre at the origin, floor at up = -1.5, constant-depth plane
-%   at forward = 5, scene point P = (5, 1.4, -1.5).
+% Two frames are used, both with the camera centre at the origin:
+%
+%   World frame (forward, lateral, up): forward = horizontal, receding into
+%   the page; lateral = sideways to the camera's right; up = vertical.
+%   The floor is the plane up = \H.
+%
+%   Camera frame (axis, lateral, camera-up): the world frame pitched down by
+%   \tilt degrees about the lateral axis, so the first coordinate runs along
+%   the optical axis, which points down towards the floor. The camera body,
+%   optical axis, constant-depth plane and depth arrow are drawn in this
+%   frame. Because the camera is pitched, the constant-depth plane is tilted
+%   and meets the floor along a line rather than standing upright on it.
+%
+% The tilt is only for illustration and need not be exact.
 \begin{tikzpicture}[>=Latex, line join=round, font=\small,
-    x={(0.75cm,0.45cm)}, y={(1cm,-0.12cm)}, z={(0cm,1cm)}]
+    x={(1cm,0.2cm)}, y={(0.55cm,-0.4cm)}, z={(0cm,1cm)}]
 
   \colorlet{depthcol}{blue!70!black}
-  \def\D{5}      % depth of P
+  \def\tilt{30}  % downward pitch of the camera (degrees)
+  \def\D{4}      % depth of P (along the optical axis)
   \def\L{1.4}    % lateral offset of P
-  \def\H{-1.5}   % floor height (P sits on the floor)
+  \def\H{-2.5}   % floor height (P sits on the floor)
+  \pgfmathsetmacro\ct{cos(\tilt)}
+  \pgfmathsetmacro\st{sin(\tilt)}
+  % camera-up coordinate at which the constant-depth plane meets the floor
+  \pgfmathsetmacro\hP{(\H+\D*\st)/\ct}
+  % screen vectors of the pitched camera frame (world x and z rotated)
+  \pgfmathsetmacro\fxs{1*\ct}\pgfmathsetmacro\fys{0.2*\ct-\st}
+  \pgfmathsetmacro\uxs{1*\st}\pgfmathsetmacro\uys{0.2*\st+\ct}
 
-  % ---- floor ----------------------------------------------------------
+  % ---- floor (world frame) ---------------------------------------------
   \fill[black!5] (-1,-1.6,\H) -- (7.2,-1.6,\H) -- (7.2,3,\H) -- (-1,3,\H) -- cycle;
   \draw[black!30] (-1,-1.6,\H) -- (7.2,-1.6,\H) -- (7.2,3,\H) -- (-1,3,\H) -- cycle;
   \node[black!50,anchor=north west] at (-1,3,\H) {floor};
 
-  % ---- optical axis beyond the depth plane (hidden behind it) ----------
-  \draw[black!45,dashed] (\D,0,0) -- (7.6,0,0)
-    node[black!55,anchor=south west] {optical axis};
+  % ---- camera height above the floor (world frame) ---------------------
+  \draw[black!40,dotted,thick] (-0.2,0,-0.2) -- (-0.2,0,\H);
 
-  % ---- plane of constant depth through P (perpendicular to the axis) --
-  \fill[black!12] (\D,-1,\H) -- (\D,2.4,\H) -- (\D,2.4,1.1) -- (\D,-1,1.1) -- cycle;
-  \draw[black!55] (\D,-1,\H) -- (\D,2.4,\H) -- (\D,2.4,1.1) -- (\D,-1,1.1) -- cycle;
-  \node[black!70,anchor=west,align=left] at (\D,2.4,0.2)
-    {plane of\\constant depth};
+  \begin{scope}[x={(\fxs cm,\fys cm)}, y={(0.55cm,-0.4cm)}, z={(\uxs cm,\uys cm)}]
+    % key points in the camera frame
+    \coordinate (F)  at (\D,0,0);      % foot point of P on the optical axis
+    \coordinate (P)  at (\D,\L,\hP);   % scene point on the floor
+    \coordinate (Fl) at (\D,0,\hP);    % where the depth plane meets the floor below F
 
-  % ---- camera (small box, lens facing forward) -------------------------
-  \fill[black!75] (-0.5,-0.3,-0.22) -- (-0.5,0.3,-0.22) -- (-0.5,0.3,0.22) -- (-0.5,-0.3,0.22) -- cycle;
-  \fill[black!40] (-0.5,-0.3,0.22) -- (0,-0.3,0.22) -- (0,0.3,0.22) -- (-0.5,0.3,0.22) -- cycle;
-  \fill[black!60] (-0.5,0.3,-0.22) -- (0,0.3,-0.22) -- (0,0.3,0.22) -- (-0.5,0.3,0.22) -- cycle;
-  \node[anchor=east] at (-0.5,-0.3,0) {camera};
+    % ---- plane of constant depth through P (perpendicular to the axis) -
+    \fill[black!12] (\D,-1,\hP) -- (\D,2.4,\hP) -- (\D,2.4,1.4) -- (\D,-1,1.4) -- cycle;
+    \draw[black!55] (\D,-1,\hP) -- (\D,2.4,\hP) -- (\D,2.4,1.4) -- (\D,-1,1.4) -- cycle;
+    \node[black!70,anchor=west,align=left,xshift=8pt] at (\D,2.4,0.4)
+      {plane of\\constant depth};
+  \end{scope}
 
-  % ---- camera height above the floor, and its floor footprint ----------
-  \draw[black!40,dotted,thick] (-0.25,0,-0.22) -- (-0.25,0,\H);
-  \draw[black!40,dotted,thick] (-0.25,0,\H) -- (\D,0,\H);
+  % ---- floor footprint of the camera, up to the depth plane (world) ----
+  \draw[black!40,dotted,thick] (-0.2,0,\H) -- (Fl);
 
-  % ---- optical axis in front of the depth plane ------------------------
-  \draw[black!45,dashed] (0,0,0) -- (\D,0,0);
+  \begin{scope}[x={(\fxs cm,\fys cm)}, y={(0.55cm,-0.4cm)}, z={(\uxs cm,\uys cm)}]
+    % ---- camera (small box, lens facing along the optical axis) --------
+    \fill[black!75] (-0.5,-0.3,-0.22) -- (-0.5,0.3,-0.22) -- (-0.5,0.3,0.22) -- (-0.5,-0.3,0.22) -- cycle;
+    \fill[black!40] (-0.5,-0.3,0.22) -- (0,-0.3,0.22) -- (0,0.3,0.22) -- (-0.5,0.3,0.22) -- cycle;
+    \fill[black!60] (-0.5,0.3,-0.22) -- (0,0.3,-0.22) -- (0,0.3,0.22) -- (-0.5,0.3,0.22) -- cycle;
+    \node[anchor=east] at (-0.5,-0.3,0) {camera};
 
-  % ---- projection of P onto the optical axis (inside the depth plane) --
-  \draw[black!75,dotted,thick] (\D,\L,\H) -- (\D,\L,0) -- (\D,0,0);
-  \draw[black!75,dotted,thick] (\D,\L,\H) -- (\D,0,\H) -- (\D,0,0);
+    % ---- optical axis in front of the depth plane ----------------------
+    \draw[black!45,dashed] (0,0,0) -- (F)
+      node[pos=0.5,sloped,anchor=south,yshift=-1pt,font=\footnotesize,
+           text=black!55] {optical axis};
 
-  % right-angle marker where the optical axis meets the depth plane
-  \draw[black!65] (\D-0.3,0,0) -- (\D-0.3,0.25,0) -- (\D,0.25,0);
+    % ---- projection of P onto the optical axis (inside the depth plane)
+    \draw[black!75,dotted,thick] (P) -- (\D,\L,0) -- (F);
+    \draw[black!75,dotted,thick] (P) -- (Fl) -- (F);
 
-  % foot point on the optical axis
-  \fill[black] (\D,0,0) circle (1.6pt);
+    % right-angle marker where the optical axis meets the depth plane
+    \draw[black!65] (\D-0.35,0,0) -- (\D-0.35,0.35,0) -- (\D,0.35,0);
 
-  % ---- Euclidean distance: the ray from the camera to P ----------------
-  \draw[black!75] (0,0,0) -- (\D,\L,\H)
-    node[pos=0.4,sloped,anchor=north,yshift=-1pt,font=\footnotesize,
-         fill=black!5,inner sep=1pt] {Euclidean distance};
+    % foot point on the optical axis
+    \fill[black] (F) circle (1.6pt);
 
-  % ---- depth z(u,v): measured along the optical axis -------------------
-  \draw[|<->|,depthcol,line width=1pt] (0,0,0.3) -- (\D,0,0.3)
-    node[midway,sloped,anchor=south,yshift=1pt] {depth $z(u,v)$};
+    % ---- Euclidean distance: the ray from the camera to P --------------
+    \draw[black!75] (0,0,0) -- (P)
+      node[pos=0.4,sloped,anchor=north,yshift=-1pt,font=\footnotesize,
+           fill=black!5,inner sep=1pt] {Euclidean distance};
+
+    % ---- depth z(u,v): measured along the optical axis -----------------
+    \draw[|<->|,depthcol,line width=1pt] (0,0,0.6) -- (\D,0,0.6)
+      node[midway,sloped,anchor=south,yshift=1pt] {depth $z(u,v)$};
+  \end{scope}
 
   % ---- the scene point -------------------------------------------------
-  \fill[black] (\D,\L,\H) circle (2pt);
-  \node[anchor=north,align=center] at (\D,\L,\H-0.1)
+  \fill[black] (P) circle (2pt);
+  \node[anchor=north,align=center,yshift=-3pt] at (P)
     {scene point $P$\\captured by pixel $(u,v)$};
 
 \end{tikzpicture}

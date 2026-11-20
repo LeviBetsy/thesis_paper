@@ -1,13 +1,13 @@
 % Trinity University departmental honors thesis cover page.
 % Edit the fields below. Leave a field empty ({}) to print a blank line
 % that can be filled in by hand.
-\newcommand{\coverTitle}{\Thesistitle}      % thesis title (defaults to preliminaries.tex)
+\newcommand{\coverTitle}{Monocular Depth Estimation for Robot Localization}      % thesis title (defaults to preliminaries.tex)
 \newcommand{\coverAuthor}{LEVI LE}      % author (defaults to preliminaries.tex)
 \newcommand{\coverDepartment}{}             % e.g. Engineering Science
 \newcommand{\coverDate}{NOVEMBER 20, 2026}                   % e.g. April 20, 2026
-\newcommand{\coverAdvisor}{}                % printed above "THESIS ADVISOR" (optional)
-\newcommand{\coverChair}{}                  % printed above "DEPARTMENT CHAIR" (optional)
-\newcommand{\coverAVPAA}{Jennifer Henderson, AVPAA}
+\newcommand{\coverAdvisor}{DR. KEVIN NICKELS}  % printed below the signature line, above "THESIS ADVISOR"
+\newcommand{\coverChair}{DR. YU ZHANG}      % printed below the signature line, above "DEPARTMENT CHAIR"
+\newcommand{\coverAVPAA}{Kyle Gillette, Associate Provost}
 
 % Underlined fill-in field: \coverfield{width}{content}
 \newcommand{\coverfield}[2]{\underline{\makebox[#1]{#2}}}
@@ -37,17 +37,19 @@ DATE\ \coverDate\par
 \noindent
 \begin{minipage}[t]{0.45\textwidth}
   \raggedright
-  \coverfield{2.4in}{\coverAdvisor}\\[0.15in]
+  \coverfield{2.4in}{}\\[0.1in]
+  \coverAdvisor\\[0.05in]
   THESIS ADVISOR
 \end{minipage}%
 \hfill
 \begin{minipage}[t]{0.45\textwidth}
   \raggedleft
-  \coverfield{2.75in}{\coverChair}\\[0.15in]
+  \coverfield{2.75in}{}\\[0.1in]
+  \makebox[2.75in][l]{\coverChair}\\[0.05in]
   \makebox[2.75in][l]{DEPARTMENT CHAIR}
 \end{minipage}
 
-\vspace{1.6in}
+\vfill
 \coverfield{3.2in}{}\\[0.15in]
 \coverAVPAA\par
 

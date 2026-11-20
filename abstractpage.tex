@@ -1,0 +1,45 @@
+% Abstract page (follows the cover page).
+% Title is reused from coverpage.tex (\coverTitle).
+
+\clearpage
+\thispagestyle{empty}
+\begin{center}
+  \vspace*{0.5in}
+  {\Large\bfseries\coverTitle\par}
+  \vspace{0.25in}
+  {\large Levi Le\par}
+  \vspace{0.4in}
+  {\bfseries Abstract\par}
+\end{center}
+
+\vspace{0.1in}
+\noindent
+Mobile robots usually localize with a dedicated range sensor such as a LiDAR, which adds cost,
+weight, and power draw that are hard to justify on a small, battery-powered platform. This thesis
+asked whether monocular depth estimation (MDE), which predicts the depth of every pixel from a
+single camera image, is good enough to take the place of such a sensor. To answer this question,
+we built the Cyclops rover, a small wheeled robot whose only view of its surroundings is a single
+front-mounted camera. Each camera frame was passed to Depth Anything V2, a vision transformer
+model that predicts relative depth. Because relative depth has an unknown scale and shift that
+change from frame to frame, we recovered metric depth on every frame by fitting the scale and
+shift to points on the floor whose depth is fixed by the camera's mounting. The metric depth map
+was then back-projected into a point cloud, stripped of the floor, and reduced to a planar range
+scan of the same form as a LiDAR scan. This scan served as the measurement for Monte Carlo
+localization in a known occupancy grid map, alongside wheel odometry, and the resulting pose
+estimate guided A* path planning toward a goal. In tests inside a $1.105$~m $\times$ $1.82$~m
+enclosure, the pose estimated by the rover stayed within \red{[X]}~cm of the true pose recorded by
+an overhead camera, and the rover reached its goal in \red{[N]} of $10$ trials. These results show
+that, on a flat, well-lit floor and at short range, a single camera can replace a dedicated range
+sensor for localizing a small robot.
+
+\vspace{0.2in}
+\noindent
+\textit{Keywords}: Monocular depth estimation, Monte Carlo localization, Vision transformer,
+Depth Anything V2, Mobile robot
+
+\clearpage
+
+%%% Local Variables: ***
+%%% mode: latex ***
+%%% TeX-master: "thesis.tex" ***
+%%% End: ***

@@ -1,0 +1,55 @@
+% Differential-drive arc over one packet interval (top-down view).
+%
+%   The rover turns left about a center point. The left wheel, the axle
+%   midpoint, and the right wheel each follow a concentric arc of length
+%   d_{L,j}, d_j, and d_{R,j}. The angle swept at the center is the heading
+%   change \delta\theta_j. The rover is drawn at the start and end of the arc.
+%
+% Pure vector TikZ so it survives the latex -> dvipdf build.
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize, scale=1.4,
+    wheel/.style={draw=black!80, fill=black!55},
+    axle/.style={black!80, line width=0.8pt},
+    track/.style={black!70, line width=0.7pt},
+    guide/.style={black!40, dashed, line width=0.4pt},
+    heading/.style={->, black!85, line width=0.7pt},
+    lbl/.style={inner sep=1.5pt},
+  ]
+  \def\R{3.2}    % arc radius of the axle midpoint
+  \def\hw{0.7}   % half of the wheel spacing w
+  \def\ang{45}   % heading change, in degrees
+  \def\lang{27}  % angle at which the arc lengths are labelled
+
+  % ---- center of the arc and radius guides --------------------------------
+  \draw[guide] (0,0) -- (0:{\R+\hw+0.4});
+  \draw[guide] (0,0) -- (\ang:{\R+\hw+0.4});
+  \fill (0,0) circle (1.3pt) node[below=2pt] {center of arc};
+  \draw[->, black!80] (0.9,0) arc[start angle=0, end angle=\ang, radius=0.9];
+  \node at ({\ang/2}:1.3) {$\delta\theta_j$};
+
+  % ---- wheel and midpoint arcs --------------------------------------------
+  \draw[track] ({\R-\hw},0) arc[start angle=0, end angle=\ang, radius={\R-\hw}];
+  \draw[track] ({\R+\hw},0) arc[start angle=0, end angle=\ang, radius={\R+\hw}];
+  \draw[track, dashed, black] (\R,0) arc[start angle=0, end angle=\ang, radius=\R];
+
+  \node[lbl, anchor=\lang]       at (\lang:{\R-\hw}) {$d_{L,j}$};
+  \node[lbl, anchor={\lang+180}] at (\lang:{\R+\hw}) {$d_{R,j}$};
+  \node[lbl, fill=white, inner sep=1pt] at (\lang:\R) {$d_j$};
+
+  % ---- rover at the start (rotate=0) and end (rotate=\ang) of the arc -----
+  \foreach \rot in {0,\ang} {
+    \begin{scope}[rotate=\rot]
+      \draw[axle] ({\R-\hw},0) -- ({\R+\hw},0);
+      \draw[wheel] ({\R-\hw-0.08},-0.28) rectangle ({\R-\hw+0.08},0.28);
+      \draw[wheel] ({\R+\hw-0.08},-0.28) rectangle ({\R+\hw+0.08},0.28);
+      \fill (\R,0) circle (1.3pt);
+      \draw[heading] (\R,0) -- (\R,0.7);
+    \end{scope}
+  }
+  \node[lbl, anchor=north west] at ({\R+\hw+0.12},-0.12) {start};
+  \node[lbl, anchor=south east] at ($(\ang:\R)+({\ang+90}:0.7)$) {end};
+
+  % ---- wheel spacing ------------------------------------------------------
+  \draw[<->, black!70] ({\R-\hw},-0.5) -- ({\R+\hw},-0.5)
+        node[midway, below] {$w$};
+
+\end{tikzpicture}

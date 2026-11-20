@@ -1,12 +1,47 @@
 \chapter{Future Work}
 \label{ch:future-work}
 
-Depth Anything V3
+This chapter lists directions in which the work on the Cyclops rover can be extended, first for
+monocular depth estimation and then for localization.
 
-test metric model + test metric model after calibration
+\begin{itemize}
+  \item \textbf{Depth Anything V3.} Depth Anything V3~\red{[]} was released after the depth
+  pipeline of Chapter~\ref{ch:mde} was built around DAv2~\cite{DepthAnythingV2}. Replacing the
+  backbone with the newer model and repeating the accuracy and latency tests of
+  Chapter~\ref{ch:results} would show whether it gives a better range scan on the rover.
 
+  \item \textbf{Metric models versus calibrated relative depth.} The metric DAv2 models were set
+  aside in Section~\ref{sec:depth-calibration} on the basis of preliminary trials. A direct
+  comparison is still needed: the metric models and our relative model, after the scale and
+  shift calibration of Section~\ref{sec:metric-scale}, should be evaluated on the same scenes to
+  see which gives more accurate depth on the rover.
 
-No need for checkerboard pattern, just use mounting geometry
+  \item \textbf{Ground points from mounting geometry.} The ground points used to calibrate depth
+  are currently found by placing a checkerboard on the floor and solving the
+  Perspective-n-Point problem (Section~\ref{sec:metric-scale}). Since the camera is rigidly
+  mounted, the 3D coordinate of any floor pixel can instead be computed directly from the
+  camera's height and tilt, by intersecting the pixel's ray with the ground plane. This removes
+  the checkerboard altogether and allows ground points closer to the rover, which would reduce
+  the minimum range discussed in Section~\ref{sec:results-limitations}.
+
+  \item \textbf{Depth accuracy away from the floor.} The depth accuracy test of
+  Section~\ref{sec:results-depth} measures error only at checkerboard corners, which all lie on
+  the floor. The obstacles that form the range scan, however, are walls and objects above the
+  floor. Recording the same scenes with an RGB-D camera~\cite{rgbd} or a LiDAR as ground truth
+  would measure the depth error at these points as well.
+
+  \item \textbf{Learning the measurement model parameters.} The beam model parameters
+  $\sigma_{\mathrm{hit}}$, $\lambda_{\mathrm{short}}$, and the mixture weights $\beta$
+  (Table~\ref{tab:meas-params}) can be learned from data instead of being set by hand. Thrun et
+  al.~\cite{thrun2005probabilistic} describe a maximum likelihood estimator that finds the
+  parameters that best explain a set of recorded scans taken from known poses. Applying it to
+  MDE range scans would fit the model to the actual error of the depth network.
+
+  \item \textbf{Simultaneous localization and mapping.} The rover currently localizes against a
+  map that is made in advance. A natural next step is simultaneous localization and mapping
+  (SLAM)~\cite{durrantwhyte2006slam}, in which the rover builds the occupancy grid from its own
+  MDE range scans while localizing in it, so that no prior map is needed.
+\end{itemize}
 %%% Local Variables: ***
 %%% mode: latex ***
 %%% TeX-master: "thesis.tex" ***

@@ -1,6 +1,81 @@
 \chapter{Conclusion}
 \label{ch:conclusion}
 
+This thesis asked whether monocular depth estimation is good enough to replace a dedicated range
+sensor for robot localization (Section~\ref{sec:research-question}). The Cyclops rover showed that
+it is. With the depth calibration and range scan described in Chapter~\ref{ch:mde}, a single camera
+gave Monte Carlo localization enough information to track the rover's pose in a known map and to
+drive the rover to a goal, \red{[headline result, e.g.\ reaching the goal in $N$ of $10$ trials
+with a mean position error of $X$~cm]}. This answer holds under the conditions listed in
+Section~\ref{sec:conclusion-conditions}, which follow from how the depth is calibrated and from
+the short range of the scan.
+
+\section{Summary of Findings}
+\label{sec:conclusion-findings}
+
+The three parts of the research question were answered as follows.
+
+\textbf{Metric depth without an additional sensor.} Depth Anything V2 predicts relative disparity,
+which is correct only up to an unknown scale and shift that change from frame to frame
+(Section~\ref{sec:alignment}). Because the camera is rigidly mounted above a flat floor, the depth
+of the floor directly in front of the rover is known and fixed. Fitting the scale and shift to
+these ground points on every frame, by ridge regression, recovered metric depth with no sensor
+other than the camera (Section~\ref{sec:metric-scale}). The disparities of the ground points lay
+close to a single line (Figure~\ref{fig:disparity-fit}), which confirmed that the affine model of
+the disparity holds on the rover, and the back-projected depth was within \red{[X]}~cm of the
+checkerboard ground truth (Section~\ref{sec:results-depth}).
+
+\textbf{A range scan for a standard measurement model.} The metric depth map was back-projected
+into a 3D point cloud, stripped of the floor, and reduced to a range scan of $16$ rays
+(Section~\ref{sec:mde-to-range}). Because this scan has the same form as the scan of a planar
+LiDAR, MCL used it with the beam model of Thrun et al.~\cite{thrun2005probabilistic} without any
+change to the model itself. Only the parameters of the model and the geometry of the ray casting
+were adapted to the camera (Section~\ref{sec:measurement-model}).
+
+\textbf{Localization and navigation.} With the MDE range scan as its measurement, MCL estimated the
+rover's pose to within \red{[X]}~cm in position and \red{[Y]}$^\circ$ in heading of the true pose
+recorded by the overhead camera (Section~\ref{sec:results-localization}), and the rover reached its
+goal in \red{[N]} of $10$ trials (Section~\ref{sec:results-navigation}).
+
+\section{Conditions and Limitations}
+\label{sec:conclusion-conditions}
+
+The answer above holds under the conditions that the method relies on.
+\begin{itemize}
+  \item \textbf{Lighting.} MDE predicts depth from the appearance of the image, so the rover must
+  operate in a well-lit area (Chapter~\ref{ch:mde}).
+
+  \item \textbf{A flat floor.} Metric scale is recovered from the floor, so the rover must drive on
+  a flat ground plane, and anything that rises above that plane is treated as an obstacle
+  (Section~\ref{sec:metric-scale}).
+
+  \item \textbf{A clear strip in front of the rover.} The ground points used for calibration must
+  see bare floor, so the rover cannot drive close enough to an obstacle for the obstacle to cover
+  them, and a frame with no usable ground points returns no depth. This sets a minimum distance
+  between the rover and any obstacle. In small scenes, it left few places where the rover could
+  be, so the tests were run in more spacious scenes (Section~\ref{sec:results-limitations}).
+
+  \item \textbf{Short range.} Ranges were used only up to $0.40$~m, so the rover saw only the
+  obstacles close in front of it.
+
+  \item \textbf{A known map and a small test area.} The rover localized against a map made in
+  advance, and all tests were run inside a $1.105$~m $\times$ $1.82$~m enclosure with two
+  arrangements of obstacles (Section~\ref{sec:test-env}).
+
+  \item \textbf{Off-board computation.} Depth Anything V2 ran on a laptop rather than on the rover,
+  because it was too slow on the Raspberry Pi (Section~\ref{sec:DAV2}). At about three range scans
+  per second, the rover had to move in short steps and stop to wait for a new scan after each one
+  (Section~\ref{sec:navigation}).
+\end{itemize}
+
+Chapter~\ref{ch:future-work} describes ways to relax several of these conditions, such as
+computing the ground points from the camera's mounting geometry instead of a checkerboard, and
+learning the parameters of the measurement model from data.
+
+Within these conditions, the Cyclops rover showed that a single camera can do the work of a
+dedicated range sensor for localization. A small robot that already carries a camera can
+therefore localize itself in a known map without the added cost, weight, and power draw of a
+LiDAR.
 
 %%% Local Variables: ***
 %%% mode: latex ***

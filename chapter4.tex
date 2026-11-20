@@ -92,7 +92,8 @@ The advantage of the ViT stems from a difference in \emph{inductive bias}, the a
 architecture builds in about the structure of its input. A convolution applies a small kernel to
 each local neighborhood, so a CNN assumes that nearby pixels matter most and builds global context
 only indirectly, by stacking layers and downsampling until its \emph{receptive field} (the region
-of the input influencing a feature) covers the scene. Through self-attention, a ViT instead lets
+of the input influencing a feature) covers the scene. \red{too many unexplained
+jargons and} Through self-attention, a ViT instead lets
 every patch attend to every other patch, giving global context from the first layer~\cite{ViT}.
 This matters for MDE because depth cues are rarely local: judging the distance to an obstacle
 depends on where it meets the ground plane, the perspective lines converging toward the horizon,
@@ -149,6 +150,35 @@ real-time navigation. Depth inference is therefore offloaded to a laptop: the ro
 camera frame to the laptop, which runs DAv2-Small and returns the resulting depth map.
 The measured inference latency on the
 laptop is reported in Chapter~\ref{ch:results}.
+
+Figure~\ref{fig:dav2-output} shows a camera frame from the Cyclops rover and the relative
+disparity map $\hat{d}$ that DAv2-Small predicts from it.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<dav2-input>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\RGB frame $I$ from the rover's camera}}}
+    \caption{Camera frame $I$.}
+    \label{fig:dav2-output-rgb}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<dav2-disparity>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Relative disparity map $\hat{d}$\\predicted by DAv2-Small\\for the same frame}}}
+    \caption{Relative disparity $\hat{d}$.}
+    \label{fig:dav2-output-disparity}
+  \end{subfigure}
+  \caption[Depth Anything V2 output]{A single camera frame from the Cyclops rover and the
+    relative disparity map $\hat{d}$ predicted from it by Depth Anything V2. \red{not really but how do i explain color}
+    Brighter pixels have
+    larger disparity and are therefore closer to the camera.}
+  \label{fig:dav2-output}
+\end{figure}
 
 
 \section{Calibrating Metric Depth}
@@ -326,8 +356,46 @@ directly in front of the rover for ground calibration. If no far-row point survi
 
 \label{sec:mde-to-range}
 
+\red{todo}
+
+
+\subsection{Pipeline Overview}
+\label{sec:mde-pipeline}
+
+Figure~\ref{fig:mde-pipeline} depicts the complete pipeline that turns a single camera frame into
+a range scan. The Raspberry Pi captures an RGB frame $I$ and sends it to the laptop over an SSH
+tunnel. On the laptop, Depth Anything V2 (Section~\ref{sec:DAV2}) predicts the relative disparity
+$\hat{d}(u,v)$, which is converted to metric depth $\hat{z}(u,v)$ by fitting $a^{*}$ and $b^{*}$ to
+the ground points (Section~\ref{sec:metric-scale}). Every pixel is then back-projected into a 3D
+point cloud with Equation~\eqref{eq:backprojection}, and the points on the ground plane are
+deleted. The remaining obstacle points are reduced to the 1D range scan
+$R_0, \dots, R_{n-1}$ of Equation~\eqref{eq:ray-scan}, which is sent back over the SSH tunnel to the
+navigation loop on the Pi.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/mde-pipeline}
+  \caption[Monocular depth to range scan pipeline]{Monocular depth to range scan pipeline of the
+    Cyclops rover. The Raspberry Pi sends each camera frame $I$ to the laptop, where Depth
+    Anything V2 predicts a relative disparity map $\hat{d}$. The disparity is calibrated to
+    metric depth $\hat{z}$ using the ground points, back-projected into a 3D point cloud, stripped
+    of ground-plane points, and reduced to a 1D range scan
+    $R_0, \dots, R_{n-1}$ that is returned to the Pi's navigation loop. Text above an arrow is the
+    data carried; text below it is the link it travels over.}
+  \label{fig:mde-pipeline}
+\end{figure}
+
+The calibration of $\hat{d}$ to metric depth is described in the previous section
+(Section~\ref{sec:depth-calibration}). The remaining steps, namely back-projection to 3D,
+ground-plane deletion, and reduction to a 1D range scan, are explained in the following
+subsections.
+
 
 \subsection{Back-Projection to 3D}
+\red{CHANGE ALL TO CAMERA COORDINATE, MISSING THE TRANSFORMER COORDINATE CHANGE STEP 
+${}^{C}\mathbf{p}$ and ${}^{R}\mathbf{p}$   }
+
+
 
 The conversion from depth map to 3D points follows the pinhole camera model as described by
 \red{[COMPUTER VISION BOOK AUTHOR]}~\red{[]}, using the intrinsics $f_x$, $f_y$, $c_x$, and $c_y$ calibrated in
@@ -388,6 +456,17 @@ scan is formed.
   \label{fig:point-cloud}
 \end{figure}
 
+To check how accurate the back-projected point cloud is, we compare it against ground truth from a
+checkerboard target. The checkerboard is placed at several positions in front of the rover, at
+different distances and lateral offsets. For each placement, the checkerboard's inner corners are
+detected in the camera frame, and OpenCV's \texttt{solvePnP}~\red{[]} uses their known
+spacing and the calibrated intrinsics (Section~\ref{sec:camera}) to compute each corner's true 3D
+position in the camera frame. The same corner pixels are then back-projected with
+Equation~\eqref{eq:backprojection} using the metric depth predicted by the MDE model, and the two
+sets of 3D points are compared. Because the \texttt{solvePnP} pose comes from geometry alone, any
+difference between the two point sets is error in the MDE model's depth prediction.
+\red{[RESULTS: per-placement error / table or figure]}
+
 \subsection{Ground-Plane Deletion}
 
 The back-projected point cloud includes the floor in front of the rover, which is not an obstacle
@@ -399,7 +478,8 @@ downward, placing the ceiling outside the camera's field of view.
 
 \subsection{Reduction to a 1D Angular Range Scan}
 
-\red{THIS SECTION IS BADLY WRITTEN. PLEASE IGNORE} Because the rover moves in the plane of the floor, the height of an obstacle does not matter for
+\red{THIS SECTION IS BADLY WRITTEN. PLEASE IGNORE, consider a visualization} 
+Because the rover moves in the plane of the floor, the height of an obstacle does not matter for
 localization or navigation. Only its position on the floor does. The remaining points are therefore
 transformed into the robot frame and projected onto the floor plane by discarding their height.
 Each point $i$ then has a lateral coordinate $x_i$, which is positive to the rover's right, and a
@@ -427,32 +507,6 @@ Each ray therefore reports the distance to the nearest obstacle within its angul
 range at $r_{\max}$ because MDE becomes unreliable at long distances. As a result, a ray with no
 point within $r_{\max}$ reports $r_{\max}$, which marks free space. The result is a 1D range scan of
 length $n$, the same form of observation a planar LiDAR produces. rmax is picked at 40cm for experiments.
-
-\subsection{Entire MDE Pipeline}
-\label{sec:mde-pipeline}
-
-Figure~\ref{fig:mde-pipeline} depicts the complete pipeline that turns a single camera frame into
-a range scan. The Raspberry Pi captures an RGB frame $I$ and sends it to the laptop over an SSH
-tunnel. On the laptop, Depth Anything V2 (Section~\ref{sec:DAV2}) predicts the relative disparity
-$\hat{d}(u,v)$, which is converted to metric depth $\hat{z}(u,v)$ by fitting $a^{*}$ and $b^{*}$ to
-the ground points (Section~\ref{sec:metric-scale}). Every pixel is then back-projected into a 3D
-point cloud with Equation~\eqref{eq:backprojection}, and the points on the ground plane are
-deleted. The remaining obstacle points are reduced to the 1D range scan
-$R_0, \dots, R_{n-1}$ of Equation~\eqref{eq:ray-scan}, which is sent back over the SSH tunnel to the
-navigation loop on the Pi.
-
-\begin{figure}[htbp]
-  \centering
-  \input{figures/mde-pipeline}
-  \caption[Monocular depth to range scan pipeline]{Monocular depth to range scan pipeline of the
-    Cyclops rover. The Raspberry Pi sends each camera frame $I$ to the laptop, where Depth
-    Anything V2 predicts a relative disparity map $\hat{d}$. The disparity is calibrated to
-    metric depth $\hat{z}$ using the ground points, back-projected into a 3D point cloud, stripped
-    of ground-plane points, and reduced to a 1D range scan
-    $R_0, \dots, R_{n-1}$ that is returned to the Pi's navigation loop. Text above an arrow is the
-    data carried; text below it is the link it travels over.}
-  \label{fig:mde-pipeline}
-\end{figure}
 
 %%% Local Variables: ***
 %%% mode: latex ***

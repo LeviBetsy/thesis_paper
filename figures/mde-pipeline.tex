@@ -20,7 +20,8 @@
     module/.style={draw=black!75, fill=white, rounded corners=2pt,
                    text width=2.2cm, align=center, minimum height=0.8cm},
     imgmodule/.style={draw=black!75, fill=white, rounded corners=2pt,
-                   text width=2.4cm, align=center, inner ysep=4pt},
+                   text width=2.4cm, align=center, inner ysep=4pt,
+                   execute at begin node={\hyphenpenalty=10000}},
     imgcap/.style={font=\scriptsize\itshape, text width=2.4cm, align=center},
     group/.style={draw=black!50, fill=black!4, rounded corners=4pt},
     title/.style={font=\footnotesize\bfseries, anchor=north},
@@ -29,34 +30,36 @@
   ]
 
   % ---- computers (drawn first, so modules sit on top) -------------------
-  \draw[group] (-0.3,-4.9) rectangle (2.3,3.2);
-  \node[title] at (1.0,3.15) {Raspberry Pi};
+  \draw[group] (-0.3,-4.9) rectangle (2.3,3.6);
+  \node[title] at (1.0,3.55) {Raspberry Pi};
 
-  \draw[group] (3.7,-4.9) rectangle (14.0,3.2);
-  \node[title] at (8.85,3.15) {Laptop};
+  \draw[group] (3.7,-4.9) rectangle (14.15,3.6);
+  \node[title] at (8.93,3.55) {Laptop};
 
   % ---- Pi modules -----------------------------------------------------------
   \node[module] (cap) at (1.0,0.6)  {Frame capture};
   \node[module] (nav) at (1.0,-3.9) {Navigation loop};
 
   % ---- top row: laptop --------------------------------------------------------
-  \node[module, minimum height=1.2cm] (dav2) at (5.0,0.6)
-       {Depth Anything V2\\(ViT-S, frozen)};
+  \node[imgmodule] (dav2) at (5.15,0.6)
+       {Depth\\Anything V2\\(\mbox{ViT-S}, frozen)\\[3pt]
+        \placeholderimg{depth map\\image}\\[2pt]
+        {\scriptsize\itshape Relative depth map}};
 
-  \node[imgmodule] (cal) at (8.45,0.6)
+  \node[imgmodule] (cal) at (8.75,0.6)
        {Depth calibration\\[3pt]
         \placeholderimg{ground-point\\image}\\[2pt]
         {\scriptsize\itshape Ground points fit\\$a^{*}, b^{*}$ per frame}};
 
-  \node[imgmodule] (pc) at (12.3,0.6)
+  \node[imgmodule] (pc) at (12.45,0.6)
        {Back-projection\\[3pt]
         \placeholderimg{point cloud\\image}\\[2pt]
         {\scriptsize\itshape 3D point cloud\\in camera frame}};
 
   % ---- bottom row: laptop -----------------------------------------------------
-  \node[module, minimum height=1.0cm] (del) at (12.3,-3.9)
+  \node[module, minimum height=1.0cm] (del) at (12.45,-3.9)
        {Ground-plane\\deletion};
-  \node[module, minimum height=1.0cm] (scan) at (8.45,-3.9)
+  \node[module, minimum height=1.0cm] (scan) at (8.75,-3.9)
        {Reduction to\\1D range scan};
 
   % ---- data flow --------------------------------------------------------------

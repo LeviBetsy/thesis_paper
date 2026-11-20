@@ -1,8 +1,101 @@
 \chapter{Localization}
 \label{ch:localization}
-What localization is
-\red{diagram of whole architecture}
+Localization is the problem of estimating a robot's pose, its position and heading,
+relative to a map of its environment~\cite{thrun2005probabilistic}. A robot cannot measure
+its pose directly. It has to infer the pose from how it has moved and from what its sensors
+observe. Each source is unreliable on its own. Wheel odometry drifts over time, because
+small errors in every wheel count add up as the robot drives. A single range sensor reading is
+often ambiguous, because different places in the map can look alike. A localization
+algorithm combines the two sources so that the pose estimate stays accurate as the robot
+moves.
+
+In this work, the map of the environment is known in advance, so the rover only has to
+estimate its pose within that map. This is different from simultaneous localization and
+mapping (SLAM), where the robot builds the map and localizes in it at the same
+time~\cite{durrantwhyte2006slam}. For the Cyclops rover, the sensor reading 
+is the range scan recovered from
+monocular depth (Section~\ref{sec:mde-to-range}), and the motion is measured by the wheel
+encoders (Chapter~\ref{ch:embedded}).
+
+Localization runs inside the navigation loop on the Raspberry Pi
+(Figure~\ref{fig:data-flow}). Figure~\ref{fig:nav-loop} depicts the two modules that make up
+the navigation loop. The localization module takes the range scan from the laptop and the
+left and right wheel counts from the MSP432, and uses them to estimate the rover's pose in
+the map. The path planning module takes this pose estimate, plans a path toward the goal,
+and sends target wheel speeds back to the MSP432. Most of this chapter covers the
+localization module. Path planning is described in Section~\ref{sec:navigation}.
+
+\red{read, good}
+\begin{figure}[htbp]
+  \centering
+  \input{figures/navigation-loop}
+  \caption[Navigation loop on the Raspberry Pi]{Navigation loop on the Raspberry Pi. The
+    localization module estimates the rover's pose from the range scan sent by the laptop
+    and the wheel counts sent by the MSP432. The path planning module uses the pose
+    estimate to send target wheel speeds to the MSP432.}
+  \label{fig:nav-loop}
+\end{figure}
+
 \section{Testing Environment}
+\label{sec:test-env}
+
+All localization tests were run inside a rectangular enclosure with wooden walls,
+1.105~m wide and 1.82~m long. The walls bound the area the rover can drive in and also give
+the measurement model a known set of surfaces to range against. Because the enclosure is
+small and its size is known exactly, the map $m$ can be hard-coded as an occupancy grid of
+1.5~cm square cells, where a value of 1 marks an occupied cell and 0 marks a free cell. The
+rover's true position can then be checked against this map.
+
+Two scenes were set up inside the enclosure, each with a different arrangement of
+obstacles. Figure~\ref{fig:test-scenes} shows a top-down photograph of each scene next to
+its map, as visualized by the localization software.
+
+\red{read good}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<scene1-photo>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Top-down photo of scene 1}}}
+    \caption{Scene 1, top-down photo.}
+    \label{fig:scene1-photo}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<scene1-map>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Map visualization of scene 1}}}
+    \caption{Scene 1, map.}
+    \label{fig:scene1-map}
+  \end{subfigure}
+
+  \vspace{0.5em}
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<scene2-photo>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Top-down photo of scene 2}}}
+    \caption{Scene 2, top-down photo.}
+    \label{fig:scene2-photo}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<scene2-map>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Map visualization of scene 2}}}
+    \caption{Scene 2, map.}
+    \label{fig:scene2-map}
+  \end{subfigure}
+  \caption[Test scenes]{The two test scenes inside the 1.105~m $\times$ 1.82~m wooden
+    enclosure. The left column shows a top-down photograph of each scene, and the right
+    column shows the matching map used by the localization software.}
+  \label{fig:test-scenes}
+\end{figure}
+
 \section{Monte Carlo Localization}
 \label{sec:mcl}
 
@@ -18,7 +111,7 @@ distribution over all possible poses.
   \mathrm{bel}(x_t) = p(x_t \mid z_{1:t}, u_{1:t}, m)
 \end{equation}
 
-MCL does not store the belief as a closed-form distribution. Instead, it keeps a set of $M$
+MCL keeps a set of $M$
 samples, called particles, where each particle is one guess of the rover's pose.
 Equation~\ref{eq:particle-set} shows the particle set at time $t$.
 \begin{equation}
@@ -26,25 +119,19 @@ Equation~\ref{eq:particle-set} shows the particle set at time $t$.
   \mathcal{X}_t = \left\{ x_t^{[1]}, x_t^{[2]}, \dots, x_t^{[M]} \right\}
 \end{equation}
 Areas of the map that hold many particles are areas where the rover is likely to be, and
-areas that hold few particles are areas where it is unlikely to be.
+areas that hold few particles are areas where it is unlikely to be. \red{do we insert visualization here?}
 
 MCL was chosen over Gaussian filters such as the extended Kalman filter (EKF) and the
-unscented Kalman filter (UKF) for several reasons~\cite{thrun2005probabilistic}. First, the
-EKF and UKF represent the belief as a single Gaussian, so they can only track one pose
-hypothesis at a time. They cannot solve global localization, where the starting pose is
-unknown, and they cannot recover once the estimate has diverged. A particle set can hold
-several hypotheses at once in different parts of the map. Second, the EKF linearizes the
-motion and measurement models. The UKF avoids linearization but still assumes Gaussian
-noise. MCL places no such restriction on either model. Third, EKF localization usually works
-on a small set of extracted landmarks and must decide which landmark each measurement
-belongs to. MCL can score raw range measurements directly against the map, which suits the
-Cyclops rover, whose measurement is a dense range scan obtained from monocular depth
-(Section~\ref{sec:mde-to-range}). Finally, the cost of MCL grows linearly with the number of
+unscented Kalman filter (UKF) for two main reasons~\cite{thrun2005probabilistic}. First, MCL
+does not assume that the belief or the noise is Gaussian, so it can represent arbitrary
+distributions over the pose. Second, the cost of MCL grows linearly with the number of
 particles $M$, so it can be tuned to fit the computational budget of the rover.
 
 Algorithm~\ref{alg:mcl} lists the MCL procedure, adapted from~\cite{thrun2005probabilistic}.
-The particle index is written as $k$ instead of $m$ so that it is not confused with the
-map $m$.
+The MCL algorithm is based on the Particle Filter algorithm~\cite{thrun2005probabilistic}.
+Each call to Algorithm~\ref{alg:mcl} updates the belief from time $t-1$ to time $t$. The
+inputs are the previous particle set $\mathcal{X}_{t-1}$, the latest control $u_t$, the
+latest measurement $z_t$, and the map $m$. 
 
 \begin{algorithm}[htbp]
   \caption{Monte Carlo Localization, adapted from~\cite{thrun2005probabilistic}}
@@ -58,7 +145,7 @@ map $m$.
         \State $\bar{\mathcal{X}}_t \gets \bar{\mathcal{X}}_t \cup \left\{ \langle x_t^{[k]}, w_t^{[k]} \rangle \right\}$
       \EndFor
       \For{$k = 1$ \textbf{to} $M$}
-        \State draw $i$ with probability $\propto w_t^{[i]}$
+        \State draw $i$ from $\bar{\mathcal{X}}_t$ with probability $\propto w_t^{[i]}$
         \State add $x_t^{[i]}$ to $\mathcal{X}_t$
       \EndFor
       \State \Return $\mathcal{X}_t$
@@ -66,21 +153,20 @@ map $m$.
   \end{algorithmic}
 \end{algorithm}
 
-Each call to Algorithm~\ref{alg:mcl} updates the belief from time $t-1$ to time $t$. The
-inputs are the previous particle set $\mathcal{X}_{t-1}$, the latest control $u_t$, the
-latest measurement $z_t$, and the map $m$. Line~2 creates two empty sets: a temporary set
+Line~2 creates two empty sets: a temporary set
 $\bar{\mathcal{X}}_t$ that holds weighted particles, and the output set $\mathcal{X}_t$. The
 rest of the algorithm runs in three steps.
 
 \textbf{Prediction (line 4).} Each particle is moved forward by drawing a new pose from the
-motion model, given the control $u_t$ and the particle's previous pose. Because the draw is
-random, particles that started at the same pose spread apart, which reflects the uncertainty
-in the rover's motion. The motion model used by the Cyclops rover is described in
+motion model, given the control $u_t$ and the particle's previous pose. Because the motion
+model deliberately adds noise to each particle's movement update, particles that started at
+the same pose spread apart, which reflects the uncertainty in the rover's motion. The motion model used by the Cyclops rover is described in
 Section~\ref{sec:motion-model}.
 
 \textbf{Weighting (lines 5--6).} Each moved particle is given an importance weight
-$w_t^{[k]}$ by the measurement model. The weight is high when the measurement $z_t$ the rover
-actually received matches what it would expect to see from pose $x_t^{[k]}$ in the map $m$,
+$w_t^{[k]}$ by the measurement model. The weight is high when the measurement $z_t$
+ the rover
+actually received (its MDE range scan) matches what it would expect to see from pose $x_t^{[k]}$ in the map $m$,
 and low otherwise. Line~6 stores the particle together with its weight in
 $\bar{\mathcal{X}}_t$. The measurement model used by the Cyclops rover is described in
 Section~\ref{sec:measurement-model}.
@@ -96,26 +182,654 @@ Particles with high weight are likely to be drawn several times, while particles
 weight are likely to disappear. After resampling, the particles gather in the parts of the
 map that agree with the measurement.
 
+Together, the weighting and resampling steps implement importance sampling, following the
+approach in~\cite{thrun2005probabilistic}. The particles produced by the prediction step are
+drawn from the motion model alone, so they follow the predicted belief
+$\overline{\mathrm{bel}}(x_t)$ rather than the true posterior $\mathrm{bel}(x_t)$, which also
+accounts for the measurement $z_t$. The importance weights correct for this mismatch, and
+resampling in proportion to these weights converts the particle set into an approximation of
+$\mathrm{bel}(x_t)$.
+
 Line~12 returns $\mathcal{X}_t$, which represents the belief $\mathrm{bel}(x_t)$ and becomes
 the input to the next call. A single pose estimate for the rover is taken as
-the mean of the particle set \red{[confirm: mean vs.\ best particle vs.\ cluster mean]}.
+the mean of the particle set.
 
 Algorithm~\ref{alg:mcl} itself is generic and does not depend on the robot or its sensors.
 What makes it specific to the Cyclops rover are the two models it calls:
 \textsc{sample\_motion\_model} and \textsc{measurement\_model}. The next two sections
-describe how each was built for the rover.
+describe how each was built for the rover. The measurement model also places one restriction
+on resampling: particles are never placed in cells of the map that the rover cannot
+physically occupy. This restriction is explained in Section~\ref{sec:measurement-model}.
+
+\red{at the start, we initialize it with a gaussian distribution around the known start}
 
 \section{Cyclops Rover Motion Model}
 \label{sec:motion-model}
-What specifically did we do 
+The Cyclops rover uses the odometry motion model from~\cite{thrun2005probabilistic}. The
+model takes as input an odometry increment $(\Delta x, \Delta y, \Delta\theta)$ that
+describes how the rover moved since the previous MCL update, expressed in the rover's frame
+at the start of that interval: $\Delta x$ is the travel along the starting heading,
+$\Delta y$ is the travel to the left of it, and $\Delta\theta$ is the change in heading. The
+encoders do not provide this increment directly. Section~\ref{sec:wheel-odometry} describes
+how it is computed on the Raspberry Pi from the encoder slot counts, and
+Section~\ref{sec:odom-sampling} describes how it is used to move the particles.
+
+\subsection{Wheel Odometry}
+\label{sec:wheel-odometry}
+Every 100\,ms, the MSP432 sends the cumulative left and right slot counts $C_L$ and $C_R$ to
+the Raspberry Pi (Section~\ref{sec:uart-slot-count}). Equation~\ref{eq:odom-count-diff}
+gives the change in count of each wheel between packet $j-1$ and packet $j$.
+\begin{equation}
+  \label{eq:odom-count-diff}
+  \Delta C_{L,j} = C_{L}[j] - C_{L}[j-1], \qquad
+  \Delta C_{R,j} = C_{R}[j] - C_{R}[j-1]
+\end{equation}
+Because the counts are cumulative, a dropped packet loses no motion; its counts are simply
+included in the next difference.
+
+Equation~\ref{eq:odom-wheel-dist} converts these counts into the distance traveled by each
+wheel, where $N = 360$ is the number of slots per revolution (Section~\ref{sec:encoder}) and
+$c$ is the wheel circumference.
+\begin{equation}
+  \label{eq:odom-wheel-dist}
+  d_{L,j} = \frac{c}{N}\, \Delta C_{L,j}, \qquad
+  d_{R,j} = \frac{c}{N}\, \Delta C_{R,j}
+\end{equation}
+Over one packet interval, the rover is assumed to follow a circular arc.
+Equation~\ref{eq:odom-arc} gives the arc length $d_j$ traveled by the midpoint of the axle
+and the change in heading $\delta\theta_j$, where $w$ is the distance between the two wheels.
+Figure~\ref{fig:odom-arc} illustrates these quantities.
+\begin{equation}
+  \label{eq:odom-arc}
+  d_j = \frac{d_{L,j} + d_{R,j}}{2}, \qquad
+  \delta\theta_j = \frac{d_{R,j} - d_{L,j}}{w}
+\end{equation}
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/odom-arc}
+  \caption[Arc traveled by the rover over one packet interval]{Arc traveled by the rover
+    over one packet interval, viewed from above. The left wheel, the axle midpoint, and the
+    right wheel follow concentric arcs of length $d_{L,j}$, $d_j$, and $d_{R,j}$. The angle
+    $\delta\theta_j$ swept about the center of the arc equals the change in the rover's
+    heading.}
+  \label{fig:odom-arc}
+\end{figure}
+
+The camera produces a new measurement at about 3 frames per second, so several packets
+arrive between two MCL updates. The arcs from these packets are combined into a single
+increment. Equation~\ref{eq:odom-accumulate} gives the increment after $J$ packets, where
+$\phi_j = \sum_{i=1}^{j} \delta\theta_i$ is the heading change accumulated after packet $j$,
+with $\phi_0 = 0$.
+\begin{equation}
+  \label{eq:odom-accumulate}
+  \Delta x = \sum_{j=1}^{J} d_j \cos\!\left(\phi_{j-1} + \frac{\delta\theta_j}{2}\right),
+  \qquad
+  \Delta y = \sum_{j=1}^{J} d_j \sin\!\left(\phi_{j-1} + \frac{\delta\theta_j}{2}\right),
+  \qquad
+  \Delta\theta = \phi_J
+\end{equation}
+Each arc is laid down along the heading the rover has reached so far within the interval,
+$\phi_{j-1}$, rather than the heading at the start of the interval. Otherwise, a turn
+followed by a straight drive would be recorded as moving in the wrong direction. A more
+detailed treatment of odometry-based motion is given in Chapter~5
+of~\cite{thrun2005probabilistic}.
+
+When MCL performs an update, it reads the accumulated increment and resets it to zero. 
+This ensures that every arc is applied to the particles exactly once,
+even though the packets are processed on a separate thread from the filter. The increment is
+also discarded whenever the particle set is re-initialized, since motion from before the
+reset no longer describes any particle.
+
+\red{read good}
+
+\subsection{Sampling the Motion}
+\label{sec:odom-sampling}
+\red{visualization for these}
+The model breaks the increment into an initial rotation $\delta_{\mathrm{rot1}}$, a
+straight-line translation $\delta_{\mathrm{trans}}$, and a final rotation
+$\delta_{\mathrm{rot2}}$. Equation~\ref{eq:odom-decomp} defines these three motions.
+\begin{equation}
+  \label{eq:odom-decomp}
+  \delta_{\mathrm{rot1}} = \mathrm{atan2}(\Delta y, \Delta x), \qquad
+  \delta_{\mathrm{trans}} = \sqrt{\Delta x^2 + \Delta y^2}, \qquad
+  \delta_{\mathrm{rot2}} = \Delta\theta - \delta_{\mathrm{rot1}}
+\end{equation}
+Because the increment is expressed relative to the rover rather than the map, each particle
+applies $\delta_{\mathrm{rot1}}$ relative to its own heading. Particles that face different
+directions therefore move in different directions on the map, as they should.
+
+\red{tmi}Each of the three motions is corrupted by zero-mean Gaussian noise whose standard deviation
+grows with the size of the motion. Equation~\ref{eq:motion-sigma} gives these standard
+deviations, where the parameters $\alpha_1$ to $\alpha_4$ are listed in
+Table~\ref{tab:motion-params}.
+\begin{equation}
+  \label{eq:motion-sigma}
+  \begin{aligned}
+    \sigma_{\mathrm{rot1}}  &= \alpha_1 |\delta_{\mathrm{rot1}}| + \alpha_2 |\delta_{\mathrm{trans}}| \\
+    \sigma_{\mathrm{trans}} &= \alpha_3 |\delta_{\mathrm{trans}}| + \alpha_4 \left( |\delta_{\mathrm{rot1}}| + |\delta_{\mathrm{rot2}}| \right) \\
+    \sigma_{\mathrm{rot2}}  &= \alpha_1 |\delta_{\mathrm{rot2}}| + \alpha_2 |\delta_{\mathrm{trans}}|
+  \end{aligned}
+\end{equation}
+The absolute values keep each $\sigma$ positive for right turns and for reverse motion,
+both of which give negative values of $\delta$.
+
+For every particle $k$, a noisy version of each motion is drawn independently.
+Equation~\ref{eq:motion-sample} shows this draw, where $\varepsilon \sim
+\mathcal{N}(0, \sigma^2)$ uses the matching $\sigma$ from Equation~\ref{eq:motion-sigma}.
+\begin{equation}
+  \label{eq:motion-sample}
+  \hat{\delta}_{\mathrm{rot1}} = \delta_{\mathrm{rot1}} - \varepsilon_{\mathrm{rot1}}, \qquad
+  \hat{\delta}_{\mathrm{trans}} = \delta_{\mathrm{trans}} - \varepsilon_{\mathrm{trans}}, \qquad
+  \hat{\delta}_{\mathrm{rot2}} = \delta_{\mathrm{rot2}} - \varepsilon_{\mathrm{rot2}}
+\end{equation}
+Equation~\ref{eq:motion-update} then moves the particle from its pose
+$(x, y, \theta)$ to its new pose $(x', y', \theta')$, with $\theta'$ wrapped into
+$[0, 2\pi)$.
+\begin{equation}
+  \label{eq:motion-update}
+  \begin{aligned}
+    x'      &= x + \hat{\delta}_{\mathrm{trans}} \cos(\theta + \hat{\delta}_{\mathrm{rot1}}) \\
+    y'      &= y + \hat{\delta}_{\mathrm{trans}} \sin(\theta + \hat{\delta}_{\mathrm{rot1}}) \\
+    \theta' &= \theta + \hat{\delta}_{\mathrm{rot1}} + \hat{\delta}_{\mathrm{rot2}}
+  \end{aligned}
+\end{equation}
+The weights of the particles are not changed by the motion update, since motion says nothing
+about how well a particle explained the last measurement. Particles are also moved without
+checking the map, so a particle may end up inside a wall. Such particles are handled by the
+measurement model in Section~\ref{sec:measurement-model}.
+
+Three changes were made to the textbook model so that the noise in
+Equation~\ref{eq:motion-sigma} reflects the rotation the rover actually performed.
+
+\red{delete}\textbf{Pure rotation.} When $\delta_{\mathrm{trans}}$ is below a threshold
+$\delta_{\min}$, the bearing $\mathrm{atan2}(\Delta y, \Delta x)$ is dominated by encoder
+noise and gives a random $\delta_{\mathrm{rot1}}$. In this case the step is treated as a
+turn in place, with $\delta_{\mathrm{rot1}} = 0$ and $\delta_{\mathrm{rot2}} = \Delta\theta$.
+
+\textbf{Reverse motion.} When the rover drives straight backward,
+Equation~\ref{eq:odom-decomp} gives $\delta_{\mathrm{rot1}} \approx \pi$, describing the step
+as a half turn, a forward translation, and a half turn back. The mean pose is correct, but
+the phantom rotation of $\pi$ greatly inflates $\sigma_{\mathrm{rot1}}$ and
+$\sigma_{\mathrm{trans}}$. Whenever $|\delta_{\mathrm{rot1}}| > \pi/2$, the sign of
+$\delta_{\mathrm{trans}}$ is flipped and $\delta_{\mathrm{rot1}}$ is shifted by $\pi$, so the
+step is modeled as a backward translation with no turn.
+
+\textbf{Angle wrapping.} $\delta_{\mathrm{rot1}}$ and $\delta_{\mathrm{rot2}}$ are wrapped
+into $[-\pi, \pi)$ before Equation~\ref{eq:motion-sigma} is evaluated. For example, a
+rotation of $-350^\circ$ is the same as one of $+10^\circ$, but without wrapping it would
+receive 35 times the noise.
+
+Table~\ref{tab:motion-params} lists the motion model parameters used on the Cyclops rover.
+\begin{table}[htbp]
+  \centering
+  \caption{Motion model parameters of the Cyclops rover.}
+  \label{tab:motion-params}
+  \small
+  \begin{tabular}{l l l l}
+    \hline
+    Parameter & Description & Units & Value \\
+    \hline
+    $\alpha_1$     & Rotation noise from rotation       & rad/rad & \red{TBD} \\
+    $\alpha_2$     & Rotation noise from translation    & rad/m   & \red{TBD} \\
+    $\alpha_3$     & Translation noise from translation & m/m     & \red{TBD} \\
+    $\alpha_4$     & Translation noise from rotation    & m/rad   & \red{TBD} \\
+    $\delta_{\min}$ & Pure-rotation threshold           & m       & \red{TBD} \\
+    \hline
+  \end{tabular}
+\end{table}
+
 \section{Cyclops Rover Measurement Model}
 \label{sec:measurement-model}
-Latency measured from laptop to be around 300ms
+
+The measurement model assigns each particle its importance weight in line~5 of
+Algorithm~\ref{alg:mcl}. It answers one question: if the rover were at pose $x_t^{[k]}$ in
+the map $m$, how likely is the range scan it actually received? The measurement $z_t$ is the
+range scan produced by the MDE pipeline (Section~\ref{sec:mde-to-range}), which holds one
+range per ray. Equation~\ref{eq:scan} depicts the scan, where $z_t^i = R_i$ is the range
+reported by ray $i$ in Equation~\ref{eq:ray-scan} and $n$ is the number of rays.
+\begin{equation}
+  \label{eq:scan}
+  z_t = \left( z_t^0, z_t^1, \dots, z_t^{n-1} \right)
+\end{equation}
+
+The Cyclops rover uses the beam model from Chapter~6 of~\cite{thrun2005probabilistic}, which
+treats each ray of the scan like one beam of a planar range finder. The rays are assumed to be
+independent given the pose and the map, so the likelihood of the whole scan is the product of
+the likelihoods of its rays. Equation~\ref{eq:meas-product} depicts this product, which
+becomes the weight of particle $k$.
+\begin{equation}
+  \label{eq:meas-product}
+  w_t^{[k]} = p\!\left(z_t \mid x_t^{[k]}, m\right)
+            = \prod_{i=0}^{n-1} p\!\left(z_t^i \mid x_t^{[k]}, m\right)
+\end{equation}
+The independence assumption is optimistic for this sensor. All $n$ rays are cut from the same
+depth map predicted by the same network, so a single error, such as a poorly fitted scale
+$a^{*}$, shifts many rays at once. Treating these rays as independent makes the weights
+sharper than the evidence supports.
+
+The likelihood of each ray is computed in two steps. First, the range that the ray should
+report from pose $x_t^{[k]}$ is predicted by casting the ray through the map
+(Section~\ref{sec:ray-casting}). Second, the measured range is compared with this prediction
+using a mixture of four distributions (Section~\ref{sec:beam-model}).
+
+\subsection{Expected Range by Ray Casting}
+\label{sec:ray-casting}
+
+For each particle, the expected range $z_t^{i*}$ is the range that ray $i$ would report if the
+rover were at that particle's pose and the map were a perfect description of the world. The
+prediction must follow the same geometry as the scan built on the laptop
+(Equation~\ref{eq:ray-scan}). Otherwise, every particle would be compared against a scan it
+could never produce, and the weights would be biased even at the true pose.
+
+The rays in Equation~\ref{eq:bearing-range} are measured from the camera, not from the center
+of the rover, so the rays in the map are cast from the camera as well.
+Equation~\ref{eq:cam-position} depicts the position $(x_c, y_c)$ of the camera for a particle
+at pose $(x, y, \theta)$, where $t_y$ is the forward offset of the camera from the center of
+the rover.
+\begin{equation}
+  \label{eq:cam-position}
+  x_c = x + t_y \cos\theta, \qquad
+  y_c = y + t_y \sin\theta
+\end{equation}
+
+Each ray in Equation~\ref{eq:ray-scan} covers an angular bin of width $\phi_x / n$, and the
+predicted ray is cast along the center of that bin. Equation~\ref{eq:ray-bearing} depicts the
+bearing $\psi_i$ of the center of bin $i$, measured from straight ahead and positive to the
+rover's right, as in Equation~\ref{eq:bearing-range}.
+\begin{equation}
+  \label{eq:ray-bearing}
+  \psi_i = -\frac{\phi_x}{2} + \left( i + \frac{1}{2} \right) \frac{\phi_x}{n},
+  \qquad i = 0, \dots, n-1
+\end{equation}
+Ray $0$ is therefore the leftmost ray and ray $n-1$ the rightmost. The heading $\theta$ of a
+particle is measured counter-clockwise from the $x$ axis of the map, while the bearing is
+measured clockwise. Equation~\ref{eq:ray-heading} depicts the direction $\gamma_i$ of ray $i$
+in the map, which subtracts the bearing to account for the opposite sign.
+\begin{equation}
+  \label{eq:ray-heading}
+  \gamma_i = \theta - \psi_i
+\end{equation}
+
+Each ray is then marched through the occupancy grid in fixed steps of length $s$, starting
+from the camera. Equation~\ref{eq:ray-point} depicts the point reached after $j$ steps along
+ray $i$.
+\begin{equation}
+  \label{eq:ray-point}
+  \mathbf{p}_j = \left( x_c + j s \cos\gamma_i,\; y_c + j s \sin\gamma_i \right),
+  \qquad j = 1, 2, \dots, \left\lceil r_{\max} / s \right\rceil
+\end{equation}
+The ray stops at the first point that falls in an occupied cell or outside the map, and the
+distance traveled to that point is the expected range. Equation~\ref{eq:ray-cast} depicts
+this range, which is capped at $r_{\max}$ in the same way as Equation~\ref{eq:ray-scan}. A ray
+that reaches $r_{\max}$ without hitting anything reports $r_{\max}$, just like a ray of the
+real scan that sees no obstacle.
+\begin{equation}
+  \label{eq:ray-cast}
+  z_t^{i*} = \min\!\Big( r_{\max},\;
+    s \cdot \min\left\{ j : \mathbf{p}_j \text{ is occupied or outside the map} \right\} \Big)
+\end{equation}
+
+The step $s$ is set to one third of the cell size, or $0.5$~cm for the $1.5$~cm cells of
+the test map (Section~\ref{sec:test-env}). With this step, a ray cannot jump over a wall that is
+one cell thick, even when it crosses the wall diagonally. The cost is that the expected
+ranges are rounded to multiples of $0.5$~cm, which is small compared with the error of the
+MDE ranges. Because every ray takes the same number of steps, the rays of all $M$ particles
+are marched together, for a total of $M \times n$ rays on every scan.
+
+\subsection{Beam Model}
+\label{sec:beam-model}
+
+Given the measured range $z_t^i$ and the expected range $z_t^{i*}$, the beam model gives the
+likelihood $p(z_t^i \mid x_t^{[k]}, m)$. A measured range can differ from the expected range
+for several reasons, and the beam model describes each with its own distribution. In the
+equations below, the subscripts $t$ and $i$ are dropped, so $z$ is the measured range and
+$z^{*}$ the expected range of one ray.
+
+\textbf{Correct range with noise.} When the ray sees the obstacle that the map predicts, the
+measured range is close to $z^{*}$ but corrupted by the error of the MDE pipeline.
+Equation~\ref{eq:p-hit} depicts this case as a Gaussian centered on $z^{*}$ with standard
+deviation $\sigma_{\mathrm{hit}}$, limited to the valid range $[0, r_{\max}]$.
+\begin{equation}
+  \label{eq:p-hit}
+  p_{\mathrm{hit}}(z) =
+  \begin{cases}
+    \dfrac{1}{\eta}\, \mathcal{N}\!\left(z;\, z^{*}, \sigma_{\mathrm{hit}}^2\right)
+      & 0 \le z \le r_{\max} \\[1ex]
+    0 & \text{otherwise}
+  \end{cases}
+\end{equation}
+Equation~\ref{eq:p-hit-eta} depicts the normalizer $\eta$, which is the part of the Gaussian
+that falls inside $[0, r_{\max}]$. Without it, a particle whose expected range is close to $0$
+or to $r_{\max}$ would be penalized for the part of its Gaussian that falls outside the valid
+range.
+\begin{equation}
+  \label{eq:p-hit-eta}
+  \eta = \int_{0}^{r_{\max}} \mathcal{N}\!\left(z';\, z^{*}, \sigma_{\mathrm{hit}}^2\right) dz'
+\end{equation}
+The error of a monocular depth estimate is much larger than the error of a LiDAR, so
+$\sigma_{\mathrm{hit}}$ is much larger than it would be for a laser range finder.
+\red{range-dependent sigma (sigma grows with $z^{*}$) is a possible extension if residuals
+show it}
+
+\textbf{Unexpected obstacles.} An object that is not in the map, such as a person's foot,
+blocks the ray before it reaches the obstacle the map predicts. This can only make the
+measured range shorter than $z^{*}$. Equation~\ref{eq:p-short} depicts this case as an
+exponential distribution with rate $\lambda_{\mathrm{short}}$, limited to $[0, z^{*}]$, so
+that nearer ranges are more likely.
+\begin{equation}
+  \label{eq:p-short}
+  p_{\mathrm{short}}(z) =
+  \begin{cases}
+    \dfrac{\lambda_{\mathrm{short}}\, e^{-\lambda_{\mathrm{short}} z}}
+          {1 - e^{-\lambda_{\mathrm{short}} z^{*}}}
+      & 0 \le z \le z^{*} \\[1ex]
+    0 & \text{otherwise}
+  \end{cases}
+\end{equation}
+
+\textbf{No return.} A ray that finds no obstacle within $r_{\max}$ reports exactly $r_{\max}$
+(Equation~\ref{eq:ray-scan}). Such a reading is ambiguous: it can mean the space in front of
+the ray is free, or that an obstacle was there but the depth estimate placed it too far away
+or the ground-plane deletion removed it. Equation~\ref{eq:p-max} depicts this case as a spike
+at $r_{\max}$.
+\begin{equation}
+  \label{eq:p-max}
+  p_{\max}(z) =
+  \begin{cases}
+    1 & z \ge r_{\max} - \epsilon \\
+    0 & \text{otherwise}
+  \end{cases}
+\end{equation}
+The tolerance $\epsilon = 5$~mm only has to absorb the rounding that occurs when the range is
+sent from the laptop to the Pi as a 32-bit float, and it is kept small so that a real
+obstacle just inside $r_{\max}$ is not mistaken for a no-return. Following~\cite{thrun2005probabilistic},
+$p_{\max}$ is a point mass mixed with densities, which is not strictly a valid density but
+works in practice.
+
+\textbf{Random measurements.} Finally, the MDE pipeline sometimes reports a range that has no
+clear cause, such as a reflection or a textureless surface that the network misjudges.
+Equation~\ref{eq:p-rand} depicts this case as a uniform distribution over the valid range.
+\begin{equation}
+  \label{eq:p-rand}
+  p_{\mathrm{rand}}(z) =
+  \begin{cases}
+    \dfrac{1}{r_{\max}} & 0 \le z \le r_{\max} \\[1ex]
+    0 & \text{otherwise}
+  \end{cases}
+\end{equation}
+This term puts a floor under the likelihood of every ray, so a single bad ray cannot drive the
+weight of an otherwise good particle to zero.
+
+\textbf{Mixture.} Equation~\ref{eq:beam-mixture} depicts the likelihood of one ray as a
+weighted sum of the four distributions, where the mixture weights $\beta_{\mathrm{hit}}$,
+$\beta_{\mathrm{short}}$, $\beta_{\max}$, and $\beta_{\mathrm{rand}}$ are normalized to sum
+to one.
+\begin{equation}
+  \label{eq:beam-mixture}
+  p\!\left(z \mid x_t^{[k]}, m\right) =
+    \beta_{\mathrm{hit}}\, p_{\mathrm{hit}}(z) +
+    \beta_{\mathrm{short}}\, p_{\mathrm{short}}(z) +
+    \beta_{\max}\, p_{\max}(z) +
+    \beta_{\mathrm{rand}}\, p_{\mathrm{rand}}(z)
+\end{equation}
+The weight $\beta_{\max}$ is set high on the Cyclops rover because of the ambiguity of a
+no-return. A reading of $r_{\max}$ receives a large likelihood from $p_{\max}$ under every
+particle, so no-return rays shift the weights only slightly, and the weights are decided
+mostly by the rays that do see an obstacle. \red{figure: plot of the mixture density
+for one $z^{*}$?}
+
+\subsection{Computing the Weights}
+\label{sec:weights}
+
+Multiplying $n$ likelihoods together, as in Equation~\ref{eq:meas-product}, can produce
+numbers too small to represent in floating point. The weights are therefore computed in log
+space. Equation~\ref{eq:log-weight} depicts the log-likelihood $\ell^{[k]}$ of particle $k$,
+which is the sum of the logs of the per-ray likelihoods from Equation~\ref{eq:beam-mixture}.
+\begin{equation}
+  \label{eq:log-weight}
+  \ell^{[k]} = \sum_{i=0}^{n-1} \log p\!\left(z_t^i \mid x_t^{[k]}, m\right)
+\end{equation}
+Equation~\ref{eq:weight-norm} depicts how the log-likelihoods are turned back into normalized
+weights. The largest log-likelihood is subtracted before taking the exponential, so the best
+particle receives $e^0 = 1$ and the others receive smaller values that do not underflow to
+zero. Because the same constant is removed from every particle, it cancels in the
+normalization and does not change the result.
+\begin{equation}
+  \label{eq:weight-norm}
+  w_t^{[k]} = \frac{\exp\!\left(\ell^{[k]} - \ell_{\max}\right)}
+                   {\sum_{j=1}^{M} \exp\!\left(\ell^{[j]} - \ell_{\max}\right)},
+  \qquad
+  \ell_{\max} = \max_{j} \ell^{[j]}
+\end{equation}
+
+Finally, the weights are checked against the map. Since the motion update moves particles
+without looking at the map (Section~\ref{sec:motion-model}), some particles may end up inside
+an obstacle or outside the map. Such a particle is not a valid pose for the rover, no matter
+how well its rays match the scan, so its weight is set to zero and the remaining weights are
+normalized again. A particle with zero weight is never drawn during resampling, which is how
+particles are kept out of cells that the rover cannot physically occupy. If every particle
+is removed this way, there is nothing left to normalize, and all weights are reset to $1/M$
+instead. \red{does placeable include a clearance margin around walls? see "minimum range" note below}
+
+Table~\ref{tab:meas-params} lists the measurement model parameters used on the Cyclops rover.
+\begin{table}[htbp]
+  \centering
+  \caption{Measurement model parameters of the Cyclops rover.}
+  \label{tab:meas-params}
+  \small
+  \begin{tabular}{l l l l}
+    \hline
+    Parameter & Description & Units & Value \\
+    \hline
+    $n$                       & Number of rays per scan           & --       & 16 \\
+    $r_{\max}$                & Maximum range                     & m        & 0.40 \\
+    $s$                       & Ray-casting step                  & m        & 0.005 \\
+    $\epsilon$                & No-return tolerance               & m        & 0.005 \\
+    $\sigma_{\mathrm{hit}}$   & Standard deviation of $p_{\mathrm{hit}}$ & m & \red{TBD} \\
+    $\lambda_{\mathrm{short}}$ & Rate of $p_{\mathrm{short}}$     & m$^{-1}$ & \red{TBD} \\
+    $\beta_{\mathrm{hit}}$    & Mixture weight of $p_{\mathrm{hit}}$   & -- & \red{TBD} \\
+    $\beta_{\mathrm{short}}$  & Mixture weight of $p_{\mathrm{short}}$ & -- & \red{TBD} \\
+    $\beta_{\max}$            & Mixture weight of $p_{\max}$           & -- & \red{TBD} \\
+    $\beta_{\mathrm{rand}}$   & Mixture weight of $p_{\mathrm{rand}}$  & -- & \red{TBD} \\
+    \hline
+  \end{tabular}
+\end{table}
+
+
+\subsection{Testing the Measurement Model}
+\label{sec:meas-test}
+
+The measurement model was tested on its own, without the motion update or resampling, by
+looking at the weights it assigns across the map. A scan is simulated by casting rays from a
+known true pose on the map, and a large number of test poses are spread across the map. Each
+test pose is weighted against the simulated scan using Equations~\ref{eq:log-weight}
+and~\ref{eq:weight-norm}, and the weights are plotted on the map
+(Figure~\ref{fig:meas-test}). A well-behaved measurement
+model should give the largest weights near the true pose and small weights elsewhere, apart
+from places that genuinely look the same to the rover.
+
+Table~\ref{tab:meas-tests} lists the test cases. Each case changes which components of the
+test poses are varied, so that the sensitivity of the weights to position and to heading can
+be seen separately before they are combined. \red{[maps used and number of test poses per case]}
+\begin{table}[htbp]
+  \centering
+  \caption{Test cases for the measurement model.}
+  \label{tab:meas-tests}
+  \small
+  \begin{tabular}{l l l}
+    \hline
+    Map & Varied components & Fixed components \\
+    \hline
+    \red{[Map A]} & $x$                   & $y$, $\theta$ \\
+    \red{[Map A]} & $y$                   & $x$, $\theta$ \\
+    \red{[Map A]} & $\theta$              & $x$, $y$ \\
+    \red{[Map A]} & $x$, $y$              & $\theta$ \\
+    \red{[Map A]} & $x$, $\theta$         & $y$ \\
+    \red{[Map A]} & $y$, $\theta$         & $x$ \\
+    \red{[Map A]} & $x$, $y$, $\theta$    & -- \\
+    \red{[Map B]} & \red{[same cases?]}   & \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  % TODO: replace with \includegraphics[width=\linewidth]{figures/<meas-test>}
+  \fbox{\parbox[c][5cm][c]{0.9\linewidth}{\centering
+    \red{[PLACEHOLDER]\\Map with test poses colored by weight,\\true pose marked}}}
+  \caption[Measurement model weights across the map]{Weights assigned by the measurement model
+    to test poses spread across the map, for a scan simulated from the marked true pose.}
+  \label{fig:meas-test}
+\end{figure}
+\red{[RESULTS: describe what each case shows]}
+
+\red{move this to MDE criteria}
+That there had to be a minimum range and setting occupancy grid of map to
+value 0.8
+
+\section{Simulation}
+\label{sec:simulation}
+
+Before running MCL on the MDE range scan, the filter was tested in simulation with MDE
+removed. This separates errors in the motion model, measurement model, and resampling from
+errors in the depth estimate. The simulation uses a map of a larger real-world area than the
+test enclosure, \red{[W]~m $\times$ [L]~m} (Figure~\ref{fig:sim-map}), so that the filter has to track the rover over a
+longer path and through more places that look alike.
+
+In the simulation, a virtual rover replaces the real one. It is driven with the arrow keys
+in a browser, and its true pose is integrated at 30~Hz using the same midpoint rule as
+Equation~\ref{eq:odom-accumulate}. A step that would move the rover into an occupied cell is
+dropped, so the rover cannot drive through walls. Each time a filter step is triggered, two
+inputs are passed to the same MCL code that runs on the Raspberry Pi. The first is the
+motion since the previous step, given as an odometry increment. The second is a scan cast
+from the rover's true pose with Equation~\ref{eq:ray-cast}, with no noise added. Because the
+scan is noise-free, any failure to converge comes from the filter and not from the sensor.
+All other parameters, including the camera offset, field of view, number of rays, and
+$r_{\max}$, are read from the same configuration as the real rover.
+
+\red{test the error over time using ground truth as the actual position}
+
+At the start, the particles are drawn from a Gaussian distribution centered on the known
+starting pose. Figure~\ref{fig:sim-particles} shows the particle set at the start and after
+the rover has been driven for several filter steps.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<sim-area-photo>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Photo of the real area}}}
+    \caption{Real area.}
+    \label{fig:sim-area-photo}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<sim-map>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Occupancy grid map}}}
+    \caption{Occupancy grid map.}
+    \label{fig:sim-area-map}
+  \end{subfigure}
+  \caption[Simulation map]{The real area used for the simulation and its occupancy grid
+    map.}
+  \label{fig:sim-map}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<sim-particles-init>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Initial particle set}}}
+    \caption{Initial particle set.}
+    \label{fig:sim-particles-init}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \centering
+    % TODO: replace with \includegraphics[width=\linewidth]{figures/<sim-particles-later>}
+    \fbox{\parbox[c][4.5cm][c]{0.92\linewidth}{\centering
+      \red{[PLACEHOLDER]\\Particle set after several steps}}}
+    \caption{After several filter steps.}
+    \label{fig:sim-particles-later}
+  \end{subfigure}
+  \caption[Simulated particle set]{Particle set in the simulation. Particles are colored
+    from blue to red by weight, and the black ring marks the highest-weight particle. The
+    green circle and line mark the virtual rover's true pose and heading, and the faint
+    green rays show the scan cast from that pose.}
+  \label{fig:sim-particles}
+\end{figure}
 
 \section{Pathplanning}
 \label{sec:navigation}
 
-\red{some screenshots of different screen, map screen, real life, camera view}
+The path planning module drives the rover to a goal picked on the map. It treats the mean of
+the particle set as the rover's current position, and plans a path from there to the goal
+with A*~\red{[]} on the occupancy grid.
+
+A* searches over the free cells of the grid, where each cell connects to its eight
+neighbors. A free cell is one that is neither occupied nor within a buffer around a wall, so
+any path through free cells leaves room for the rover's body. A diagonal move is not allowed
+when it would cut between two blocked cells that touch only at a corner. A straight move costs
+one cell and a diagonal move costs $\sqrt{2}$ cells. Equation~\ref{eq:astar-h} depicts the
+heuristic $h$, the octile distance between a cell $(r, c)$ and the goal cell
+$(r_g, c_g)$, where $\Delta r = |r - r_g|$ and $\Delta c = |c - c_g|$.
+\begin{equation}
+  \label{eq:astar-h}
+  h = \sqrt{2}\,\min(\Delta r, \Delta c) + \big(\max(\Delta r, \Delta c) - \min(\Delta r, \Delta c)\big)
+\end{equation}
+The octile distance is the length of the shortest eight-connected path on an empty grid.
+Walls can only make the real path longer, so $h$ never overestimates the remaining cost,
+and A* returns the shortest path. If the mean pose falls inside a wall buffer, the search
+starts from the nearest free cell.
+
+Instead of following the path cell by cell, the rover aims at a lookahead point. Walking
+forward along the path from the rover, the lookahead point is the last cell that is no more
+than a distance $L$ along the path and can be reached from the rover in a straight line
+without leaving free space. The walk stops at the first cell that fails either test, so the
+aim never cuts across a corner.
+
+Steering toward the lookahead point is inspired by Braitenberg vehicles~\cite{braitenberg1984vehicles}, 
+which turn
+toward a stimulus and then move to it. Equation~\ref{eq:nav-turn} depicts the heading error
+$\Delta\theta$ between the rover's heading $\theta$ and the direction from its position
+$(x, y)$ to the lookahead point $(x_a, y_a)$, wrapped into $[-\pi, \pi)$.
+\begin{equation}
+  \label{eq:nav-turn}
+  \Delta\theta = \mathrm{atan2}(y_a - y,\; x_a - x) - \theta
+\end{equation}
+If $|\Delta\theta|$ is larger than a tolerance, the rover first turns in place by
+$\Delta\theta$ until it faces the lookahead point. It then drives straight toward the point
+for whichever is shorter: a fixed step length, or the distance to the point. Both the turn and the drive are
+measured with the wheel encoders rather than MCL, since MCL updates only about three times
+per second and the rover would overshoot between updates.
+
+After each step, the rover stops and waits for a range scan captured after the stop, so the
+next pose estimate includes the full motion of the step. The path is then replanned from
+the new mean pose, which also lets a new goal take over at the next step. The rover stops
+once the mean pose is within a tolerance of the goal, or when no path to the goal exists.
+
+We evaluate the full system in two ways. First, to measure localization accuracy, a camera
+mounted on a tripod above the test area records the rover as it drives to a goal. The rover's
+true path is extracted from this recording and compared with the path estimated by MCL, i.e.\
+the sequence of mean poses over the run. Because the MCL estimate depends on the range scans
+produced from monocular depth (Section~\ref{sec:mde-to-range}), any gap between the two paths
+reflects errors in both the MDE range scan and the localization, so this comparison tests MCL
+and MDE as a single system.
+
+Second, to measure how reliably the rover reaches its goal, we repeat the same navigation task
+over $10$ trials. A trial counts as a success if the rover comes to a stop within $5$~cm of the
+goal, as measured by the tripod camera, and we report the number of successful trials out of
+$10$.
+
+\red{move at 300 cps something}
+
+\red{[RESULTS: path comparison figure, success count]}
+
 
 %%% Local Variables: ***
 %%% mode: latex ***

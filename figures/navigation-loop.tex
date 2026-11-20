@@ -1,0 +1,51 @@
+% Navigation loop on the Raspberry Pi.
+%
+%   Laptop MDE --(range scan)--> Localization
+%   MSP432     --(wheel counts)--> Localization
+%   Localization --(pose estimate)--> Path planning
+%   Path planning --(target speeds)--> MSP432
+%
+% Same style as figures/data-flow.tex; each arrow is labelled with the data it
+% carries. Pure vector TikZ with hard-coded group boxes so it survives the
+% latex -> dvipdf build.
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize,
+    module/.style={draw=black!75, fill=white, rounded corners=2pt,
+                   minimum width=2.4cm, text width=2.2cm, align=center,
+                   minimum height=1.0cm},
+    group/.style={draw=black!50, fill=black!4, rounded corners=4pt},
+    subgroup/.style={draw=black!50, fill=black!12, rounded corners=4pt},
+    title/.style={font=\footnotesize\bfseries, anchor=north},
+    flow/.style={->, black!80, line width=0.6pt},
+    lbl/.style={align=center, inner sep=1.5pt},
+  ]
+
+  % ---- computers (drawn first, so modules sit on top) -------------------
+  \draw[group] (-0.9,-1.5) rectangle (2.1,1.4);
+  \node[title] at (0.6,1.35) {Laptop};
+
+  \draw[group] (3.8,-1.6) rectangle (11.7,2.0);
+  \node[title] at (7.75,1.95) {Raspberry Pi};
+
+  \draw[subgroup] (4.1,-1.3) rectangle (11.4,1.4);
+  \node[title] at (7.75,1.35) {Navigation loop};
+
+  \node[group, minimum width=7.9cm, minimum height=0.9cm,
+        font=\footnotesize\bfseries] (msp) at (7.75,-3.2) {MSP432};
+
+  % ---- software modules ---------------------------------------------------
+  \node[module, minimum height=1.4cm] (mde) at (0.6,-0.2)
+       {Monocular depth\\estimation (ViT)};
+  \node[module] (loc)  at (5.4,-0.2) {Localization\\(MCL)};
+  \node[module] (plan) at (10.1,-0.2) {Path planning};
+
+  % ---- data paths ---------------------------------------------------------
+  \draw[flow] (mde.east) -- (loc.west)
+        node[lbl, pos=0.5, above] {range scan};
+  \draw[flow] (loc.east) -- (plan.west)
+        node[lbl, midway, above] {pose estimate};
+  \draw[flow] (msp.north -| loc.south) -- (loc.south)
+        node[lbl, midway, right] {wheel counts};
+  \draw[flow] (plan.south) -- (plan.south |- msp.north)
+        node[lbl, midway, right] {wheel speeds};
+
+\end{tikzpicture}
