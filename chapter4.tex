@@ -17,7 +17,7 @@ vision~\cite{stereo}, which estimates depth by triangulating the disparity
 between matched pixels in two calibrated cameras.
 
 
-Monocular depth estimation (MDE), seeks to recover a depth map
+Monocular depth estimation (MDE), on the other hand, seeks to recover a depth map
 from a single RGB image and no additional hardware. In this sense, the goal of MDE is most similar
 to that of an RGB-D camera, which uses an infrared projector to cast a structured grid of laser dots
 onto the scene and infers per-pixel depth from how that pattern is distorted by scene geometry~\cite{rgbd}; MDE
@@ -29,7 +29,7 @@ Our work leverages transformer-based machine learning models to predict
 depth of each pixel in an RGB image. MDE has advanced rapidly in recent years, and
 current models now produce increasingly accurate and reliable depth predictions~\cite{DPT,zoedepth,DepthAnythingV2}.
 Monocular depth estimation is particularly attractive for embedded and resource-constrained
-robotic platforms, such as the cyclops rover, because it removes the need for a
+robotic platforms, such as the Cyclops rover, because it removes the need for a
 dedicated depth sensor, stereo camera rig, or LiDAR unit, all of which add cost, weight,
 and power draw.
 
@@ -39,10 +39,12 @@ from visible imagery, its predictions degrade in dark or poorly
 illuminated areas.
 
 
-Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$,
-and let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth map. An entry $z(u,v)$ 
-is the distance (in meters) along the camera's primary axis of the scene point captured by the image
-at pixel $(u,v)$. Figure~\ref{fig:depth-definition} is a visual representation of this definition.
+Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$
+. Let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth map. An entry $z(u,v)$ 
+is the distance (in meters) along the camera's optical axis of the scene point captured by the image
+at pixel $(u,v)$. \emph{Metric} means each value is in physical units, for example a point
+$20$~cm in front of the camera has a depth of $0.2$~m. Section~\ref{sec:relative-depth} explains
+how a metric depth map differs from a relative one. Figure~\ref{fig:depth-definition} illustrates this definition.
 
 \begin{figure}[htbp]
   \centering
@@ -74,7 +76,8 @@ without modification or fine-tuning of the underlying architecture.
 
 
 \subsection{Transformers for Dense Prediction}
-Early learned MDE models~\cite{MiDaS,Eigen} used convolutional
+Early learning-based MDE models (neural networks trained on images paired with ground-truth
+depth)~\cite{MiDaS,Eigen} used convolutional
 neural network (CNN) encoder--decoder architectures, in which a convolutional backbone extracts
 image features and a decoder upsamples them into a dense depth map. The Vision Transformer
 (ViT)~\cite{ViT} later adapted the transformer architecture, originally developed for natural
@@ -87,7 +90,7 @@ of most state-of-the-art MDE models, including Depth Anything V2~\cite{DepthAnyt
 The advantage of the ViT comes from how much of the image the network looks at in each step. A
 CNN slides a small filter across the image, so its early layers only look at a few neighboring
 pixels at a time, and a view of the whole scene emerges only after many layers are stacked. A ViT
-instead lets every patch exchange information with every other patch, so even its first layer
+instead lets every image patch exchange information with every other patch, so even its first layer
 looks at the whole image~\cite{ViT}.
 This matters for MDE because depth cues are rarely local: judging the distance to an obstacle
 depends on where it meets the ground plane
@@ -143,7 +146,7 @@ As noted in Section~\ref{sec:system-architecture}, DAv2 cannot run fast enough o
 to support real-time localization. Without a graphics processing unit (GPU) suited to neural
 network inference, the Raspberry Pi reached only about $0.3$ frames per second in our preliminary
 tests. Depth inference is therefore offloaded to the laptop, which returns a depth estimate for
-each frame the rover sends. Inference times on the laptop is reported in
+each frame the rover sends. Inference times on the laptop are reported in
 Section~\ref{sec:results-latency}.
 
 Figure~\ref{fig:dav2-output} shows a camera frame from the Cyclops rover and the relative
@@ -189,7 +192,7 @@ rover estimates both on every frame from the known geometry of its camera.
 \subsection{Relative versus Metric Depth}
 \label{sec:relative-depth}
 
-Most off-the-shelf MDE models do not output meters. They output relative depth: a dense,
+Most off-the-shelf MDE models do not output depth maps in meters. They output relative depth: a dense,
 unitless map that is correct in ordering rather than in measurement. Metric depth, by contrast,
 gives the absolute distance of each scene point from the camera in physical units (e.g.,
 $50$~cm). A relative depth map can say that one pixel is nearer than another, but not whether it
@@ -204,10 +207,11 @@ $\hat{d}(u,v)$ and the corresponding predicted metric depth by $\hat{z}(u,v)$.
 The main reason these models cannot output metric depth is geometric, not a deficiency that
 better training could remove. As Figure~\ref{fig:scale-ambiguity} shows, an object of size $s$ at
 distance $z$ and an object of size $2s$ at distance $2z$ produce identical images, so no model can
-distinguish them. Absolute scale cannot be recovered from a single image alone; it requires
+distinguish them. This phenomenon is known as \emph{scale ambiguity}: absolute scale cannot be
+recovered from a single image alone; it requires
 additional information, such as a known object size, a known camera mounting height, or a second
-calibrated view. Our approach uses the known mounting height of the camera and calibrated points
-on the ground plane (Section~\ref{sec:metric-scale}).
+calibrated view. Our approach resolves scale ambiguity using the known mounting height of the
+camera and calibrated points on the ground plane (Section~\ref{sec:metric-scale}).
 
 \begin{figure}[htbp]
   \centering
@@ -266,9 +270,9 @@ always images the same point on the floor relative to the camera, and the metric
 pixel stays constant from frame to frame. Such pixels provide a fixed set of reference depths
 against which every new prediction can be aligned.
 
-This method of recovering metric scale give our second constraint to the robot's 
-environmeny: that
-it operates on a ground plane and anything above that ground plane is an obstacle
+This method of recovering metric scale gives our second constraint on the robot's
+environment: it must operate on a ground plane, and anything above that ground plane is an
+obstacle.
 
 We select $N = 96$ of these pixels, which we call \emph{ground points}. Let
 $(u_k, v_k)$ denote the image location of the $k$-th ground point and $z^{\mathrm{g}}_k$ its known
@@ -293,21 +297,19 @@ that MDE predicts.
 \end{figure}
 
 
-With the ground points fixed, the alignment parameters are recalculated on every frame. For a new image,
-let $\hat{d}^{\mathrm{g}}_k = \hat{d}(u_k, v_k)$ denote the model's relative disparity at the $k$-th ground
-point. By Equation~\eqref{eq:affine-disparity}, the known depths should satisfy
-$1/z^{\mathrm{g}}_k \approx a\,\hat{d}^{\mathrm{g}}_k + b$. Equation~\eqref{eq:ridge-fit} depicts the ridge
-regression objective minimized to find $a$ and $b$, where $\lambda > 0$ is a regularization weight
-that discourages large values of the scale.
+With the ground points fixed, aligning the depth map becomes a simple linear regression problem: on
+every frame, only the two numbers $a$ and $b$ need to be estimated. Let
+$\hat{d}^{\mathrm{g}}_k = \hat{d}(u_k, v_k)$ be the model's relative disparity at the $k$-th ground
+point, whose true depth $z^{\mathrm{g}}_k$ is known. By Equation~\eqref{eq:affine-disparity}, $a$ and
+$b$ must fit $1/z^{\mathrm{g}}_k \approx a\,\hat{d}^{\mathrm{g}}_k + b$ at every ground point. We
+estimate them with ridge regression~\cite{hoerl1970ridge}, which is ordinary least squares with a small penalty on $a$.
+Equation~\eqref{eq:ridge-fit} depicts this objective, where $\lambda$ is the weight of the penalty.
 \begin{equation}
   (a^{*}, b^{*}) \;=\; \arg\min_{a,\,b} \;\sum_{k=1}^{N}
     \left( a\,\hat{d}^{\mathrm{g}}_k + b - \frac{1}{z^{\mathrm{g}}_k} \right)^{2} + \lambda\,a^{2}
   \label{eq:ridge-fit}
 \end{equation}
-We set $\lambda = 0.001$, a value chosen empirically. Because the relationship between relative
-disparity and inverse depth is close to linear (Figure~\ref{fig:disparity-fit}), the least-squares
-term alone determines $a$ and $b$ well, and only a small penalty is needed to keep the fit stable.
-The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affine-disparity} to
+We set $\lambda = 0.001$, chosen empirically. The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affine-disparity} to
 convert the relative disparity $\hat{d}(u,v)$ at every pixel into inverse metric depth $1/\hat{z}(u,v)$.
 
 
@@ -319,7 +321,7 @@ $a^{*}\hat{d} + b^{*}$. The points lie close to a single line across all $16$ ro
 of depths covered by the ground points.
 Because this test verifies the affine relationship only up to the farthest ground point, we
 cap the usable range of the recovered depth at $r_{\max} = 40$~cm, close to the depth of that
-farthest point; this cap is applied to the range scan in Equation~\eqref{eq:ray-scan}. This cap
+farthest point; this cap is applied to the range scan in Section~\ref{sec:range-scan}. This cap
 only narrows the operating scope of the rover for our experiments. It does not mean the model
 fails beyond 40~cm. Every ground point, including the farthest, follows the same linear
 relationship, so the fit itself does not require a limit.
@@ -348,13 +350,14 @@ obstacle detection.
 
 An obstacle in front of the rover can occlude some of the ground points, in which case those
 pixels image the obstacle rather than the floor, and their known depths $z^{\mathrm{g}}_k$ no
-longer apply. \red{Figure~\ref{fig:occluded-fit} shows an example in which an obstacle lies between the
-near and far rows of ground points, together with the line fitted when every ground point is kept.}
+longer apply. 
 The occluded points pull the fitted line away from the true relationship between disparity and
 inverse depth, severely degrading the accuracy of $a^{*}$ and $b^{*}$. Any ground point that does
 not lie on the floor must therefore be removed before fitting.
 
-\red{figure}
+% \red{Figure~\ref{fig:occluded-fit} shows an example in which an obstacle lies between the
+% near and far rows of ground points, together with the line fitted when every ground point is kept.}
+% \red{figure}
 
 Let $\hat{d}^{\mathrm{near}}_j$ and
 $\hat{d}^{\mathrm{far}}_j$ denote the relative disparities of the ground points in column $j$ of
@@ -415,8 +418,8 @@ $\hat{d}(u,v)$, which is converted to metric depth $\hat{z}(u,v)$ by fitting $a^
 the ground points (Section~\ref{sec:metric-scale}). Every pixel is then back-projected into a 3D
 point cloud with Equation~\eqref{eq:backprojection}, and the points on the ground plane are
 deleted. The remaining obstacle points are reduced to the 1D range scan
-$R_0, \dots, R_{n-1}$ of Equation~\eqref{eq:ray-scan}, which is sent back over the SSH tunnel to the
-navigation loop on the Pi.
+$R_0, \dots, R_{n-1}$ (Section~\ref{sec:range-scan}), which is sent back over the SSH tunnel to the
+navigation loop on the Raspberry Pi.
 
 \begin{figure}[htbp]
   \centering
@@ -426,7 +429,7 @@ navigation loop on the Pi.
     Anything V2 predicts a relative disparity map $\hat{d}$. The disparity is calibrated to
     metric depth $\hat{z}$ using the ground points, back-projected into a 3D point cloud, stripped
     of ground-plane points, and reduced to a 1D range scan
-    $R_0, \dots, R_{n-1}$ that is returned to the Pi's navigation loop. Text above an arrow is the
+    $R_0, \dots, R_{n-1}$ that is returned to the Raspberry Pi's navigation loop. Text above an arrow is the
     data carried; text below it is the link it travels over.}
   \label{fig:mde-pipeline}
 \end{figure}
@@ -441,7 +444,7 @@ subsections.
 
 The conversion from depth map to 3D points follows the pinhole camera model as described by
 Forsyth and Ponce~\cite{Forsyth_Ponce_CV}, using the intrinsics $f_x$, $f_y$, $c_x$, and $c_y$ calibrated in
-Section~\ref{sec:camera} (Equation~\eqref{eq:intrinsics}). Consider a scene point
+Equation~\eqref{eq:intrinsics}. Consider a scene point
 ${}^{C}\mathbf{p} = [{}^{C}x,\, {}^{C}y,\, {}^{C}z]^\top$ expressed in the camera frame $\{C\}$.
 Its third coordinate ${}^{C}z$ is the point's depth along the optical axis from our MDE pipeline. Equation~\eqref{eq:projection} depicts how this point
 projects onto the pixel $(u,v)$ at which it appears in the image.
@@ -454,7 +457,7 @@ projects onto the pixel $(u,v)$ at which it appears in the image.
 Inverting Equation~\eqref{eq:projection} recovers a scene point from its pixel whenever its depth
 is known. Equation~\eqref{eq:backprojection} depicts this back-projection, which recovers the
 camera-frame point ${}^{C}\mathbf{p}$ imaged at pixel $(u,v)$ from its metric depth
-${}^{C}z = \hat{z}(u,v)$ (Section~\ref{sec:metric-scale}).
+${}^{C}z = \hat{z}(u,v)$ as described in Section~\ref{sec:metric-scale}.
 \begin{equation}
   {}^{C}x = \frac{(u - c_x)\, {}^{C}z}{f_x},
   \qquad
@@ -530,16 +533,6 @@ Chapter~\ref{ch:localization} as the model is designed to tolerate occasional er
   \label{fig:point-cloud}
 \end{figure}
 
-To check how accurate the back-projected point cloud is, we compare it against ground truth from a
-checkerboard target. The checkerboard is placed at several positions in front of the rover, at
-different distances and lateral offsets. For each placement, the checkerboard's inner corners are
-detected in the camera frame, and OpenCV's \texttt{solvePnP}~\cite{opencv_library} uses their known
-spacing and the calibrated intrinsics (Section~\ref{sec:camera}) to compute each corner's true 3D
-position in the camera frame. The same corner pixels are then back-projected with
-Equation~\eqref{eq:backprojection} using the metric depth predicted by the MDE model, and the two
-sets of 3D points are compared. Because the \texttt{solvePnP} pose comes from geometry alone, any
-difference between the two point sets is error in the MDE model's depth prediction.
-
 \subsection{Ground-Plane Deletion}
 
 The back-projected point cloud includes the floor in front of the rover, which is not an obstacle
@@ -551,38 +544,32 @@ downward, placing the ceiling outside the camera's field of view.
 \subsection{Reduction to a 1D Angular Range Scan}
 \label{sec:range-scan}
 
-\red{THIS SECTION IS BADLY WRITTEN. PLEASE IGNORE, consider a visualization} 
 Because the rover moves in the plane of the floor, the height of an obstacle does not matter for
 localization or navigation. Only its position on the floor does. The remaining points are therefore
-transformed into the robot frame and projected onto the floor plane by discarding their height.
-Each point $i$ then has a lateral coordinate $x_i$, which is positive to the rover's right, and a
-forward coordinate $y_i$. The scan is then formed by casting $n$ rays (\red{16}) evenly across the camera's
-horizontal field of view $\phi_x$, so that each ray covers an angular width of $\Delta\theta = \phi_x / n$.
-Equation~\eqref{eq:bearing-range} depicts the bearing $\theta_i$ and range $r_i$ of each point,
-measured from the camera, which is mounted on the rover's centerline at a forward offset $t_y$.
-Measuring from the camera instead of the robot origin aligns the ray boundaries with the camera's
-true field of view.
-\begin{equation}
-  \theta_i = \operatorname{atan2}\!\left(x_i,\; y_i - t_y\right),
-  \qquad
-  r_i = \sqrt{x_i^{2} + (y_i - t_y)^{2}}
-  \label{eq:bearing-range}
-\end{equation}
-Equation~\eqref{eq:ray-scan} depicts how each point is assigned to ray $k_i$ and how the range
-$R_k$ reported by ray $k$ is computed, for $k = 0, \dots, n-1$.
-\begin{equation}
-  k_i = \left\lfloor \frac{\theta_i + \phi_x/2}{\Delta\theta} \right\rfloor,
-  \qquad
-  R_k = \min\!\Big( r_{\max},\; \min_{\{i \,:\, k_i = k\}} r_i \Big)
-  \label{eq:ray-scan}
-\end{equation}
-Each ray therefore reports the distance to the nearest obstacle within its angular width. We cap the
-range at $r_{\max} = 40$~cm, the extent over which the depth alignment was verified against the
-ground points. As a result, a ray with no
-point within $r_{\max}$ reports $r_{\max}$, which marks free space. The result is a 1D range scan of
-length $n$, the same form of observation a planar LiDAR produces.
+transformed into the robot frame and flattened onto the floor plane by discarding their height,
+leaving a top-down map of obstacle points as shown in Figure~\ref{fig:range-scan}.
 
-\red{maybe an image and a reference to the later chapter}
+The scan is then formed by dividing the camera's horizontal field of view into $n$ equal angular
+slices ($n = 16$) that fan out from the camera, one slice per ray. Each point falls into a single
+slice according to its bearing from the camera, and ray $k$ reports $R_k$, the distance from the
+camera to the nearest point in its slice. Slices are measured from the camera instead of the robot
+origin so that their boundaries match the camera's true field of view. We cap the range at
+$r_{\max} = 40$~cm, the extent over which the depth alignment was verified against the ground
+points, so a ray with no point within $r_{\max}$ reports $r_{\max}$, which marks free space. This
+approach
+results in a 1D range scan $R_0, \dots, R_{n-1}$, the same form of observation a planar LiDAR
+produces.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/range-scan}
+  \caption[Reduction of the point cloud to a range scan]{Top-down view of the flattened obstacle
+    points (gray) in front of the rover. The field of view is split into angular slices (dashed),
+    shown here with $4$ slices instead of $16$ for clarity. Each ray reports the nearest point in
+    its slice (filled dot). Points beyond $r_{\max}$ are ignored, and a slice with no point within
+    $r_{\max}$ reports $r_{\max}$ (hollow circle).}
+  \label{fig:range-scan}
+\end{figure}
 
 %%% Local Variables: ***
 %%% mode: latex ***

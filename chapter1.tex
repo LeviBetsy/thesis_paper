@@ -2,9 +2,6 @@
 \label{ch:intro}
 \setlength\parindent{24pt}
 
-  \red{CHANGE MOST VERB TO PAST TENSE}
-
-Add both github here and check Valvano copyright excerpt on all 
 % This is an example using the template \cite{uci-thesis-latex}. 
 
 % \begin{figure}
@@ -76,15 +73,15 @@ predicted from a single image differs from a LiDAR scan in several ways.
   meters, so the scale must be recovered from somewhere else.
 
   \item \textbf{Larger error.} A LiDAR measures each range directly, with an error of a few
-  centimeters or less~\red{[]}. An MDE range is a prediction, and its error is much larger and
+  centimeters or less. An MDE range is a prediction, and its error is much larger and
   depends on the scene.
 
   \item \textbf{Correlated error.} Every ray of an MDE range scan is cut from the same depth map,
   predicted by the same network in a single pass, so one mistake, such as a poorly estimated
   scale, can shift many rays at once.
 
-  \item \textbf{Narrow field of view and short range.} A planar LiDAR typically sees all the way
-  around the robot and out to several meters~\red{[]}. A single forward-facing camera sees only
+  \item \textbf{Narrow field of view and short range.} A planar LiDAR typically sees most of the way
+  around the robot and out to several meters~\cite{kawata2005urg}. A single forward-facing camera sees only
   what is in front of it, and MDE becomes unreliable at longer distances, so the Cyclops rover
   uses ranges only up to $0.40$~m.
 
@@ -127,10 +124,16 @@ The main contributions of this thesis are:
   wheel odometry and path planning to drive to a goal using a single camera
   (Chapters~\ref{ch:embedded} and~\ref{ch:localization}).
 
-  \item An evaluation of the full system on the rover, which compares the path estimated by MCL
-  against the true path recorded by an overhead camera and measures how often the rover reaches
+  % \item An evaluation of the full system on the rover, which compares the path estimated by MCL
+  % against the true path recorded by an overhead camera and measures how often the rover reaches
+  % its goal (Chapter~\ref{ch:results}).
+  \item An evaluation of the full system on the rover, which measures how often the rover reaches
   its goal (Chapter~\ref{ch:results}).
 \end{itemize}
+
+The source code for the Cyclops rover is publicly available: the software that runs on the
+Raspberry Pi and the laptop~\cite{cyclops_github}, and the firmware that runs on the
+MSP432~\cite{cyclops_msp432_github}.
 
 \section{Thesis Outline}
 \label{sec:outline}
@@ -143,17 +146,6 @@ Chapter~\ref{ch:localization} describes the Monte Carlo localization and path pl
 that range scan. Chapter~\ref{ch:results} presents the experimental results,
 Chapter~\ref{ch:future-work} lists directions for future work, and Chapter~\ref{ch:conclusion}
 answers the research question.
-
-\section{Terms}
-\label{sec:terms}
-disparity: 
-
-primary axis:
-
-interrupt service routine:
-
-visual odometry
-
 
 
 %%% Local Variables: ***

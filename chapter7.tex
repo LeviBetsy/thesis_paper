@@ -2,12 +2,10 @@
 \label{ch:future-work}
 
 This chapter lists directions in which the work on the Cyclops rover can be extended, first for
-monocular depth estimation and then for localization. \red{also increase max range since Louw worked
-at 2m: ourdraw back. also more complex scenes and edge case scene with little defining features.
-an investigation of motion update arguments} 
+monocular depth estimation, then for localization, and finally for the embedded system.
 
 \begin{itemize}
-  \item \textbf{Depth Anything V3.} Depth Anything V3~\red{[]} was released after the depth
+  \item \textbf{Depth Anything V3.} Depth Anything V3~\cite{lin2026depthanything3} was released after the depth
   pipeline of Chapter~\ref{ch:mde} was built around DAv2~\cite{DepthAnythingV2}. Replacing the
   backbone with the newer model and repeating the accuracy and latency tests of
   Chapter~\ref{ch:results} would show whether it gives a better range scan on the rover.
@@ -26,11 +24,11 @@ an investigation of motion update arguments}
   the checkerboard altogether and allows ground points closer to the rover, which would reduce
   the minimum range discussed in Section~\ref{sec:results-limitations}.
 
-  \item \textbf{Depth accuracy away from the floor.} The depth accuracy test of
-  Section~\ref{sec:results-depth} measures error only at checkerboard corners, which all lie on
-  the floor. The obstacles that form the range scan, however, are walls and objects above the
-  floor. Recording the same scenes with an RGB-D camera~\cite{rgbd} or a LiDAR as ground truth
-  would measure the depth error at these points as well.
+  \item \textbf{Depth accuracy against ground truth.} The depth accuracy of the MDE network has
+  not yet been compared against an independent ground truth. Recording the same scenes with an
+  RGB-D camera~\cite{rgbd} or a LiDAR, or placing markers at known positions and recovering
+  their distance through pose estimation, would measure how closely the MDE depth matches the
+  true depth across the whole image.
 
   \item \textbf{Learning the measurement model parameters.} The beam model parameters
   $\sigma_{\mathrm{hit}}$, $\lambda_{\mathrm{short}}$, and the mixture weights $\beta$
@@ -44,7 +42,11 @@ an investigation of motion update arguments}
   (SLAM)~\cite{durrantwhyte2006slam}, in which the rover builds the occupancy grid from its own
   MDE range scans while localizing in it, so that no prior map is needed.
 
-  
+  \item \textbf{Step response of the PI controller.} The step-response test described in
+  Section~\ref{sec:PI} was not completed for this thesis. Recording the measured speed
+  $\Delta C[k]$ of each wheel after a step in target speed would measure the stability,
+  settling time, and steady-state error of the controller, and would show whether the
+  empirically tuned gains $K_P$ and $K_I$ can be improved.
 \end{itemize}
 %%% Local Variables: ***
 %%% mode: latex ***

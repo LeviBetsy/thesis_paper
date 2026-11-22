@@ -1,58 +1,52 @@
 \chapter{Result}
 \label{ch:results}
 
+This chapter presents the results of testing the Cyclops rover, starting with its individual
+parts and ending with the full system. Section~\ref{sec:results-latency} reports how fast each
+loop runs and explains why depth is predicted on the laptop rather than on the rover.
+The step-response test of the PI controller described in Section~\ref{sec:PI} was not
+completed and is left as future work. Section~\ref{sec:results-navigation}
+tests the full system, in which monocular depth, Monte Carlo localization, and path planning
+must all work together for the rover to reach its goal in the test environment of
+Section~\ref{sec:test-env}. Finally, Section~\ref{sec:results-limitations} discusses the
+limitations we observed during these tests.
+
 \section{Latency and Loop Rates}
 \label{sec:results-latency}
 
-\red{Promised in Chapter~\ref{ch:embedded} (System Architecture) and Section~\ref{sec:DAV2}.
-Report: loop rate table (PI controller every 10\,ms, encoder count packets every 100\,ms, MDE
-range scan and MCL update at about 3\,Hz, navigation loop); DAv2-Small inference speed on the
-Raspberry Pi 5 versus the laptop, which justifies offloading depth to the laptop; optionally
-the extra $\sim$100\,ms of the metric DAv2 models (Section~\ref{sec:depth-calibration}).}
+Table~\ref{tab:loop-rates} lists the rate of each loop on the Cyclops rover, along with the
+device it runs on.
 
-Loop rate table report
+\begin{table}[htbp]
+  \centering
+  \caption{Loop rates on the Cyclops rover.}
+  \label{tab:loop-rates}
+  \small
+  \begin{tabular}{l l l l}
+    \hline
+    Loop & Device & Period & Rate \\
+    \hline
+    PI controller             & MSP432       & 10\,ms          & 100\,Hz \\
+    Encoder count packet      & MSP432       & 100\,ms         & 10\,Hz \\
+    Monocular depth (DAv2-Small) & Laptop    & $\sim$200\,ms   & $\sim$5\,Hz \\
+    Navigation loop           & Raspberry Pi & $\sim$333\,ms   & $\sim$3\,Hz \\
+    \hline
+  \end{tabular}
+\end{table}
 
-Inference speed of model on embedded software 
-thus moving to laptop
-
-
-\section{Wheel Speed Step Response}
-\label{sec:results-step-response}
-
-\red{Promised in Section~\ref{sec:PI}. Report: measured speed $\Delta C[k]$ versus time for a
-step from zero to a constant target, for each wheel, with rise time, percent overshoot $M_p$
-(Equation~\ref{eq:overshoot}), settling time ($\pm 2\%$), and steady-state error.}
-
-\section{Monocular Depth Accuracy}
-\label{sec:results-depth}
-
-\red{Placeholder currently at the end of the Back-Projection to 3D subsection
-(Section~\ref{sec:mde-to-range}). Report: per-placement error between checkerboard corners
-back-projected from MDE depth and their \texttt{solvePnP} positions, at several distances and
-lateral offsets (table or figure).}
-
-
-\section{Measurement Model Weights}
-\label{sec:results-meas-model}
-
-\red{Placeholder currently in Section~\ref{sec:meas-test}. Report: weight maps for each test
-case in Table~\ref{tab:meas-tests} (Figure~\ref{fig:meas-test}) and what each case shows about
-the sensitivity of the weights to $x$, $y$, and $\theta$. Also the note there about needing a
-minimum range and an occupancy value of 0.8.}
-
-\section{Localization Accuracy on the Rover}
-\label{sec:results-localization}
-
-\red{Promised in Section~\ref{sec:navigation}. Report: true path extracted from the overhead
-tripod camera versus the MCL path (sequence of mean poses), which tests MDE and MCL as one
-system. Path comparison figure plus a position and heading error summary.}
+% \section{Localization Accuracy on the Rover}
+% \label{sec:results-localization}
+%
+% \red{Promised in Section~\ref{sec:navigation}. Report: true path extracted from the overhead
+% tripod camera versus the MCL path (sequence of mean poses), which tests MDE and MCL as one
+% system. Path comparison figure plus a position and heading error summary.}
 
 \section{Navigation Success Rate}
 \label{sec:results-navigation}
 
-\red{Promised in Section~\ref{sec:navigation}. Report: number of successful trials out of
-$10$, where a success means the rover stops within $5$~cm of the goal, as measured by the
-tripod camera.}
+We ran the navigation task of Section~\ref{sec:navigation} for $10$ trials. A trial counts
+as a success when the rover stops within $5$~cm of the goal, as measured by the tripod
+camera. The rover succeeded in all $10$ of $10$ trials.
 
 \section{Observed Limitations}
 \label{sec:results-limitations}
@@ -61,7 +55,7 @@ We found that the minimum range for the particle is a significant drawback of th
 since smaller scene give an almost dense map with barely placeable particles. Thus for
 diverse tests we have to settle with a more spacious scene. We can mitigate this with the 
 abolishing of checkerboard and using pure coordinate transform to get z depth at the closest
-points possible but this wont elivate much.
+points possible.
 
 
 %%% Local Variables: ***

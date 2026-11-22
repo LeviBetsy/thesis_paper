@@ -223,8 +223,8 @@ the SSH tunnel to the laptop, and enough memory and processing power to run navi
 and localization in a high-level language. This split isolates the timing-critical loop
 from the Raspberry Pi's variable workload.
 
-The Raspberry Pi, however, cannot run the vision transformer depth model fast enough to
-support real-time localization from our preliminary tests (around 0.3 FPS). Depth inference is therefore offloaded to the
+In our preliminary tests, however, the Raspberry Pi ran the vision transformer depth model at
+only about 0.3 FPS, too slow to support real-time localization. Depth inference is therefore offloaded to the
 laptop, a decision discussed further in Chapter~\ref{ch:mde}.
 
 Loop rates are reported in Chapter~\ref{ch:results} for reference, but system latency and power
@@ -415,7 +415,7 @@ Both wheels use the same gains, $K_P = 200$ and $K_I = 20$, which were tuned emp
 on the rover. Only a small number of gain combinations were tested, because precise speed
 control is not the focus of this thesis.
 
-The performance of the controller is evaluated with a step-response test~\cite{valvano}.
+The performance of the controller can be evaluated with a step-response test~\cite{valvano}.
 Starting from rest, the target speed of a wheel is changed abruptly from zero to
 $\dot{C}^* = 1{,}100$ counts per second, and the measured speed $\Delta C[k]$ is recorded
 at every sample as the wheel accelerates. This target is close to the measured maximum
@@ -429,7 +429,10 @@ standard measures~\cite{valvano}:
   \item \textbf{Steady-state error} -- the average of the error $e[k]$
     (Equation~\ref{eq:pi-error}) after the speed has settled.
 \end{itemize}
-The results of this test are presented in Chapter~\ref{ch:results}.
+This test was not completed within the time frame of this thesis and is left as future work
+(Chapter~\ref{ch:future-work}). The controller was instead validated indirectly by the
+navigation trials of Section~\ref{sec:results-navigation}, in which it drove the rover to its
+goal.
 
 \section{UART}
 \label{sec:uart}
@@ -565,7 +568,7 @@ as near the center, because distortion is strongest at the edges. Since the boar
 and its square size is known, the position of every corner on the board is known exactly.
 The corners were located in each image with OpenCV's
 \texttt{cv2.\allowbreak findChessboardCorners} function. Then $K$ and $k_1, \dots, k_4$ were
-then estimated from these corners with \texttt{cv2.\allowbreak fisheye.\allowbreak
+estimated from these corners with \texttt{cv2.\allowbreak fisheye.\allowbreak
 calibrate}~\cite{opencv_library}. Figure~\ref{fig:checkerboard-calib} shows a few
 calibration images, and Table~\ref{tab:camera-intrinsics} lists the resulting parameters.
 

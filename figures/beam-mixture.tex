@@ -1,0 +1,39 @@
+% Representative shape of the beam-model mixture density for one ray.
+%
+%   Sum of the four parts of the beam model, drawn with illustrative values
+%   (not the rover's parameters):
+%     p_short : exponential decay on [0, z*), cut off at the expected range z*
+%     p_rand  : uniform floor over [0, r_max]
+%     p_hit   : Gaussian centered on the expected range z*
+%     p_max   : narrow box at r_max
+%
+% Pure vector TikZ so it survives the latex -> dvipdf build.
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize, x=1.6cm, y=2cm,
+    density/.style={black, line width=0.8pt},
+    axis/.style={->, black!85, line width=0.6pt},
+    guide/.style={black!40, dashed, line width=0.4pt},
+  ]
+  \def\zs{3.2}   % expected range z*
+  \def\rmx{5.5}  % maximum range r_max
+
+  % axes
+  \draw[axis] (0,0) -- (6.0,0) node[below] {$z$};
+  \draw[axis] (0,0) -- (0,2.0) node[left] {$p(z \mid x_t, m)$};
+
+  % p_rand + p_short + p_hit on [0, r_max)
+  \draw[density] plot[domain=0:\rmx-0.08, samples=300, variable=\x]
+    ({\x}, {0.12 + (\x<\zs)*0.45*exp(-0.5*\x) + 1.5*exp(-((\x-\zs)^2)/0.0648)});
+
+  % p_max: narrow box at r_max on top of the uniform floor
+  \draw[density] (\rmx-0.08,0.12) -- (\rmx-0.08,1.0) -- (\rmx,1.0) -- (\rmx,0);
+
+  % tick labels
+  \draw[guide] (\zs,0) -- (\zs,1.62);
+  \draw (\zs,0) -- (\zs,-0.05) node[below] {$z_t^{i*}$};
+  \draw (\rmx,0) -- (\rmx,-0.05) node[below] {$r_{\max}$};
+\end{tikzpicture}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis.tex"
+%%% End:

@@ -5,8 +5,7 @@ This thesis asked whether monocular depth estimation is good enough to replace a
 sensor for robot localization (Section~\ref{sec:research-question}). The Cyclops rover showed that
 it is. With the depth calibration and range scan described in Chapter~\ref{ch:mde}, a single camera
 gave Monte Carlo localization enough information to track the rover's pose in a known map and to
-drive the rover to a goal, \red{[headline result, e.g.\ reaching the goal in $N$ of $10$ trials
-with a mean position error of $X$~cm]}. This answer holds under the conditions listed in
+drive the rover to a goal, reaching the goal in $10$ of $10$ trials. This answer holds under the conditions listed in
 Section~\ref{sec:conclusion-conditions}, which follow from how the depth is calibrated and from
 the short range of the scan.
 
@@ -22,8 +21,7 @@ of the floor directly in front of the rover is known and fixed. Fitting the scal
 these ground points on every frame, by ridge regression, recovered metric depth with no sensor
 other than the camera (Section~\ref{sec:metric-scale}). The disparities of the ground points lay
 close to a single line (Figure~\ref{fig:disparity-fit}), which confirmed that the affine model of
-the disparity holds on the rover, and the back-projected depth was within \red{[X]}~cm of the
-checkerboard ground truth (Section~\ref{sec:results-depth}).
+the disparity holds on the rover.
 
 \textbf{A range scan for a standard measurement model.} The metric depth map was back-projected
 into a 3D point cloud, stripped of the floor, and reduced to a range scan of $16$ rays
@@ -32,10 +30,13 @@ LiDAR, MCL used it with the beam model of Thrun et al.~\cite{thrun2005probabilis
 change to the model itself. Only the parameters of the model and the geometry of the ray casting
 were adapted to the camera (Section~\ref{sec:measurement-model}).
 
-\textbf{Localization and navigation.} With the MDE range scan as its measurement, MCL estimated the
-rover's pose to within \red{[X]}~cm in position and \red{[Y]}$^\circ$ in heading of the true pose
-recorded by the overhead camera (Section~\ref{sec:results-localization}), and the rover reached its
-goal in \red{[N]} of $10$ trials (Section~\ref{sec:results-navigation}).
+% \textbf{Localization and navigation.} With the MDE range scan as its measurement, MCL estimated the
+% rover's pose to within \red{[X]}~cm in position and \red{[Y]}$^\circ$ in heading of the true pose
+% recorded by the overhead camera (Section~\ref{sec:results-localization}), and the rover reached its
+% goal in \red{[N]} of $10$ trials (Section~\ref{sec:results-navigation}).
+\textbf{Localization and navigation.} With the MDE range scan as its measurement, MCL localized the
+rover well enough for it to reach its goal in $10$ of $10$ trials
+(Section~\ref{sec:results-navigation}).
 
 \section{Conditions and Limitations}
 \label{sec:conclusion-conditions}
@@ -59,8 +60,8 @@ The answer above holds under the conditions that the method relies on.
   obstacles close in front of it.
 
   \item \textbf{A known map and a small test area.} The rover localized against a map made in
-  advance, and all tests were run inside a $1.105$~m $\times$ $1.82$~m enclosure with two
-  arrangements of obstacles (Section~\ref{sec:test-env}).
+  advance, and all tests were run inside a $1.105$~m $\times$ $1.82$~m enclosure with one
+  arrangement of obstacles (Section~\ref{sec:test-env}).
 
   \item \textbf{Off-board computation.} Depth Anything V2 ran on a laptop rather than on the rover,
   because it was too slow on the Raspberry Pi (Section~\ref{sec:DAV2}). At about three range scans
