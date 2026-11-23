@@ -336,7 +336,8 @@ checking the map, so a particle may end up inside a wall. Such a particle is giv
 during resampling.
 
 Table~\ref{tab:motion-params} lists the motion model parameters used on the Cyclops rover,
-which we chose empirically.
+which we chose empirically. Evaluating larger noise values, especially for rotation, is left
+to future work.
 \begin{table}[htbp]
   \centering
   \caption{Motion model parameters of the Cyclops rover.}
@@ -353,8 +354,6 @@ which we chose empirically.
     \hline
   \end{tabular}
 \end{table}
-
-\red{maybe a figure to show dispersing particles}
 
 \section{Cyclops Rover Measurement Model}
 \label{sec:measurement-model}
@@ -454,9 +453,9 @@ score that is high when a particle's ray agrees with the scan, falls off smoothl
 drift apart, and never collapses to zero because of a single bad ray.
 
 This likelihood is built one ray at a time. Every particle casts its own ray $i$ through the map
-(Section~\ref{sec:ray-casting}), and a distribution is centered on the resulting expected range
+as described in Section~\ref{sec:ray-casting}, and a distribution is centered on the resulting expected ray
 $z_t^{i*}$. The range $z_t^i$ measured by ray $i$ of the 1D angular range scan produced by the MDE
-pipeline (Section~\ref{sec:range-scan}) is then evaluated in that distribution. A particle whose
+pipeline from Section~\ref{sec:range-scan} is then evaluated in that distribution. A particle whose
 expected range lies near the measured range receives a high likelihood
 $p(z_t^i \mid x_t^{[k]}, m)$ for that ray, and a particle whose expected range lies far from it
 receives a low one. Repeating this for all $n$ rays and multiplying the results
@@ -517,50 +516,128 @@ Table~\ref{tab:meas-params} lists the measurement model parameters used on the C
 \label{sec:weights}
 
 The weight of each particle is found by multiplying the likelihoods of its $n$ rays from the
-beam model (Section~\ref{sec:beam-model}), as in Equation~\ref{eq:meas-product}. The weights
+beam model, as in Equation~\ref{eq:meas-product}. The weights
 of all $M$ particles are then normalized so that they sum to one.
 
 The weights are then checked against the map. Since the motion update moves particles
-without looking at the map (Section~\ref{sec:motion-model}), some particles may end up inside
+without looking at the map as described in Section~\ref{sec:motion-model}, some particles may end up inside
 an obstacle or outside the map. Such a particle is not a valid pose for the rover, no matter
 how well its rays match the scan, so its weight is set to zero and the remaining weights are
 normalized again. A particle with zero weight is never drawn during resampling, which is how
-particles are kept out of cells that the rover cannot physically occupy. 
+particles are kept out of cells that the rover cannot physically occupy.
+
+\subsection{Measurement Model Test}
+\label{sec:measurement-test}
+
+To check the measurement model on its own, we test it without the motion model, resampling, or
+MDE. The test asks whether the weight of a particle is highest at the true pose and how quickly
+it falls as the particle moves away from that pose.
+
+The test uses an empty map of 1.00~m $\times$ 1.00~m square, with four walls and no obstacles.
+no obstacles. One pose is chosen as the true pose $x^{*} = (0.725~\text{m}, 0.725~\text{m}, \pi/4~\text{rad})$,
+snapped to the center of its grid cell. This pose faces a corner of the enclosure. Because
+$r_{\max}$ is only 40~cm, a pose in the middle of the enclosure would see no walls, and all of its
+rays would report $r_{\max}$. The reference scan $z^{*}$ is produced by casting $n$ rays from
+$x^{*}$ as described in Section~\ref{sec:ray-casting}. Since this scan contains no sensor noise,
+any spread in the weights comes from the measurement model and the geometry of the map rather than
+from MDE error.
+
+Instead of being sampled randomly, the test particles are placed on a regular grid so that they
+cover the pose space evenly. Candidate positions are the centers of the 5~cm cells, and
+candidate headings run from $0$ to $23\pi/12$~rad in steps of $\pi/12$~rad, giving 24 headings.
+Each particle casts its own $n$ rays and is weighted against $z^{*}$ using the beam model with the
+parameters in Table~\ref{tab:meas-params}. 
+
+The weight of each particle is shown as a color, with blue for a poor match and red for a close
+match. Because each weight is a product of $n$ likelihoods, the weights span many orders of
+magnitude, and a linear color scale would show little more than the single best particle.
+Equation~\ref{eq:weight-color} depicts the logarithmic value $c^{[k]}$ used to color particle $k$,
+where $w_{\max}$ is the largest weight in the sweep and $c_{\min} = -11$ is a fixed lower
+limit shared by all plots.
+\begin{equation}
+  \label{eq:weight-color}
+  c^{[k]} = \max\!\left( c_{\min},\; \log_{10} \frac{w^{[k]}}{w_{\max}} \right)
+\end{equation}
+
+The test consists of three sweeps. Each sweep varies some components of the pose over the grid
+and holds the others at their values in $x^{*}$:
+\begin{itemize}
+  \item \textbf{Vary $x$ and $y$:} a particle is placed in every cell, with $\theta$ held at the
+    true heading.
+  \item \textbf{Vary $x$ and $\theta$:} every $x$ is paired with every heading, with $y$ held at
+    its true value.
+  \item \textbf{Vary $y$ and $\theta$:} every $y$ is paired with every heading, with $x$ held at
+    its true value.
+\end{itemize}
 
 \section{Path Planning}
 \label{sec:navigation}
 
-\red{that we initially distribute with a gaussian around known pose
-with derivative that that and M.= how many paritcles}
+
 
 The path planning module drives the rover to a goal picked on the map. It treats the mean of
 the particle set as the rover's current position, and plans a path from there to the goal
 with A*~\cite{hart1968astar} on the occupancy grid.
 
+\subsection{Path Search with A*}
+\label{sec:astar-search}
+A* is a graph search algorithm that finds the shortest path from a start node to a
+goal node. It keeps the nodes waiting to be explored in a priority queue, implemented as a
+binary heap and ordered by a function $f$ that estimates the length of the best complete path
+through each node. At each step, A* removes the node with the lowest $f$ from the queue. If
+that node is the goal, the search ends. Otherwise, its neighbors are added to the queue, or
+updated if a shorter path to them has been found. Ordering the search by $f$ directs it toward
+the goal instead of expanding equally in all directions.
+
 A* searches over the free cells of the grid, where each cell connects to its eight
-neighbors. A free cell is one that is neither occupied nor within a buffer around a wall, so
-any path through free cells leaves room for the rover's body. A straight move costs
-one cell and a diagonal move costs $\sqrt{2}$ cells. Equation~\ref{eq:astar-h} depicts the
-heuristic $h$, the octile distance between a cell $(r, c)$ and the goal cell
+neighbors. A free cell is one that is not an unplaceable cell as defined in Section~\ref{sec:mcl}. A straight move costs
+one cell and a diagonal move costs $\sqrt{2}$ cells. Equation~\ref{eq:astar-f} depicts the
+priority $f$ of a cell, where $g$ is the cost of the best path found so far from the start to
+that cell and $h$ is a heuristic estimate of the remaining cost to the goal.
+\begin{equation}
+  \label{eq:astar-f}
+  f = g + h
+\end{equation}
+Moving to a neighbor adds that move's cost to $g$. Equation~\ref{eq:astar-h} depicts the
+heuristic $h$, which A* uses to estimate the remaining cost from a cell $(r, c)$ to the goal cell
 $(r_g, c_g)$, where $\Delta r = |r - r_g|$ and $\Delta c = |c - c_g|$.
 \begin{equation}
   \label{eq:astar-h}
   h = \sqrt{2}\,\min(\Delta r, \Delta c) + \big(\max(\Delta r, \Delta c) - \min(\Delta r, \Delta c)\big)
 \end{equation}
-The octile distance is the length of the shortest eight-connected path on an empty grid.
-Walls can only make the real path longer, so $h$ never overestimates the remaining cost,
-and A* returns the shortest path. If the mean pose falls inside a wall buffer, the search
-starts from the nearest free cell.
+This heuristic is the cost of the shortest path to the goal if no
+walls are in the way. Such a path first takes $\min(\Delta r, \Delta c)$ diagonal moves
+at a cost of $\sqrt{2}$ each, which aligns the cell with the goal along one axis, and then takes
+the remaining $\max(\Delta r, \Delta c) - \min(\Delta r, \Delta c)$ straight moves at a cost of
+one each. Since walls can only lengthen the path, $h$ never overestimates
+the remaining cost, which guarantees that A* returns a shortest path. If the mean pose falls
+inside a wall buffer, the search starts from the nearest free cell.
+
+\subsection{Lookahead Path Following}
+\label{sec:path-following}
 
 Instead of following the path cell by cell, the rover aims at a lookahead point. Walking
 forward along the path from the rover, the lookahead point is the last cell that is no more
-than a distance $L$ along the path and can be reached from the rover in a straight line
-without leaving free space. The walk stops at the first cell that fails either test, so the
-aim never cuts across a corner.
+than a distance $L = 30$~cm along the path and can be reached from the rover in a straight line
+without crossing an unplaceable cell.
 
-Steering toward the lookahead point is inspired by Braitenberg vehicles~\cite{braitenberg1984vehicles}, 
+Steering toward the lookahead point is inspired by Braitenberg vehicles~\cite{braitenberg1984vehicles},
 which turn
-toward a stimulus and then move to it. Equation~\ref{eq:nav-turn} depicts the heading error
+toward a stimulus and then move to it. Thus, each movement of the rover consists of two parts:
+turning to face the lookahead point and then driving straight to it, as shown in
+Figure~\ref{fig:lookahead-steps}.
+
+\begin{figure}[htbp]
+  \centering
+  \input{figures/lookahead-steps}
+  \caption[Two-step motion toward the lookahead point]{Two-step motion toward the lookahead point
+    on a top-down occupancy grid, where dark cells are occupied and the gray line is the A* path
+    to the goal. In step 1, the rover turns through the heading error $\Delta\theta$ to face the
+    lookahead point. In step 2, it drives straight to that point.}
+  \label{fig:lookahead-steps}
+\end{figure}
+
+Equation~\ref{eq:nav-turn} depicts the heading error
 $\Delta\theta$ between the rover's heading $\theta$ and the direction from its position
 $(x, y)$ to the lookahead point $(x_a, y_a)$, wrapped into $[-\pi, \pi)$.
 \begin{equation}
@@ -573,7 +650,7 @@ per second and the rover would overshoot between updates.
 
 After each step, the rover stops and waits for a range scan captured after the stop, so the
 next pose estimate includes the full motion of the step. The path is then replanned from
-the new mean pose, which also lets a new goal take over at the next step. The rover stops
+the new mean pose. The rover stops
 once the mean pose is within a tolerance of the goal, or when no path to the goal exists.
 
 % We evaluate the full system in two ways. First, to measure localization accuracy, a camera
@@ -586,11 +663,89 @@ once the mean pose is within a tolerance of the goal, or when no path to the goa
 %
 % Second, to measure how reliably the rover reaches its goal, we repeat the same navigation task
 % over $10$ trials.
+
+\subsection{Localization and Navigation Test}
+\label{sec:navigation-test}
+
+The rover starts at a known pose $x_{\mathrm{start}} = $ $(0.395, 0.55, \pi/2)$ (m, m, rad), 
+and MCL runs with
+$M = 500$ particles. Since the start pose is known, the particles are initialized around it
+rather than spread across the map. Each particle is sampled from a Gaussian centered on
+$x_{\mathrm{start}}$, with standard deviations $\sigma_x$, $\sigma_y$, and $\sigma_\theta$ in
+$x$, $y$, and $\theta$, respectively. Table~\ref{tab:init-params} lists the start pose, the
+number of particles, and these standard deviations.
+\begin{table}[htbp]
+  \centering
+  \caption{Particle initialization parameters for the navigation test.}
+  \label{tab:init-params}
+  \small
+  \begin{tabular}{l l l l}
+    \hline
+    Parameter & Description & Units & Value \\
+    \hline
+    $x_{\mathrm{start}}$ & Known start pose $(x, y, \theta)$ & (m, m, rad) & $(0.395, 0.22, \pi/2)$ \\
+    $M$                  & Number of particles               & --          & 500 \\
+    $\sigma_x$           & Initial standard deviation in $x$ & m           & 0.05 \\
+    $\sigma_y$           & Initial standard deviation in $y$ & m           & 0.05 \\
+    $\sigma_\theta$      & Initial standard deviation in $\theta$ & rad    & 0.1 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+From the start pose, the rover drives to the goal $(x_g, y_g) = $ $(0.307, 1.507)$ on the map.
+Figure~\ref{fig:nav-start-goal} shows the goal, the initial particles around the known start
+pose, and the mean pose, which is where the rover estimates it is.
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    \node[anchor=south west, inner sep=0] (img)
+      {\includegraphics[width=0.5\textwidth]{figures/astar.png}};
+    % Normalized coordinates: (0,0) = bottom-left, (1,1) = top-right of the whole image
+    \begin{scope}[x={(img.south east)}, y={(img.north west)},
+        lbl/.style={fill=white, draw, thick,
+          rounded corners=2pt, inner sep=2pt, font=\scriptsize\bfseries, anchor=west},
+        ann/.style={very thick}]
+      % Goal
+      \draw[ann, orange] (0.278,0.823) ellipse (0.030 and 0.018);
+      \node[lbl, orange, text=black] (goal) at (0.38,0.875) {Goal};
+      \draw[ann, orange] (goal.west) -- (0.303,0.833);
+      % Path
+      \node[lbl, green!70!black, text=black] (path) at (0.56,0.56) {Path};
+      \draw[ann, green!70!black] (path.west) -- (0.472,0.600);
+      % Lookahead point
+      \draw[ann, blue] (0.399,0.447) ellipse (0.024 and 0.015);
+      \node[lbl, blue, text=white] (lookahead) at (0.50,0.50) {Lookahead point};
+      \draw[ann, blue] (lookahead.west) -- (0.418,0.456);
+      % Particles
+      \draw[ann, red] (0.364,0.285) ellipse (0.150 and 0.075);
+      \node[lbl, red, text=black] (particles) at (0.50,0.175) {Particles};
+      \draw[ann, red] (particles.west) -- (0.462,0.228);
+      % Mean pose
+      \draw[ann, violet] (0.361,0.299) ellipse (0.026 and 0.016);
+      \node[lbl, violet, text=white] (mean) at (0.15,0.405) {Mean pose};
+      \draw[ann, violet] (mean.south) -- (0.343,0.310);
+    \end{scope}
+  \end{tikzpicture}
+  \caption[Start of the navigation test]{The start of the navigation test on the occupancy grid
+    map. The green line is the path, the orange cell is the goal, the blue dot is the lookahead
+    point, the red circles are the $M = 500$ initial particles around the known start pose, and
+    the purple circle is the mean pose estimated from the particles.}
+  \label{fig:nav-start-goal}
+\end{figure}
+
 We evaluate the full system by measuring how reliably the rover reaches its goal. A camera
 mounted on a tripod above the test area records the rover, and the same navigation task is
 repeated over $10$ trials. A trial counts as a success if the rover comes to a stop within $5$~cm of the
 goal, as measured by the tripod camera, and we report the number of successful trials out of
 $10$.
+
+To compare where the rover estimates it is with where it actually is, we also log the mean pose
+during a navigation run. Frames from the tripod video are combined into a single image, so the
+rover appears as a ghost trail along its actual path. The logged mean poses are then projected
+from the map onto this image, allowing the estimated path to be compared directly with the
+ghost trail.
+
+
 
 
 %%% Local Variables: ***

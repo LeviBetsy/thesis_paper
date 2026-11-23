@@ -1,0 +1,62 @@
+% Two-step lookahead motion on a top-down occupancy grid.
+%
+%   Step 1: the rover turns through \Delta\theta to face the lookahead point.
+%   Step 2: the rover drives straight to the lookahead point.
+%   The A* path runs from the rover to the goal around two occupied blocks.
+%
+% Pure vector TikZ so it survives the latex -> dvipdf build.
+\begin{tikzpicture}[>=Latex, line join=round, font=\footnotesize, x=0.62cm, y=0.62cm,
+    occupied/.style={fill=black!65, draw=none},
+    gridline/.style={black!18, line width=0.3pt},
+    astar/.style={black!45, line width=1.1pt},
+    motion/.style={->, black, line width=1pt},
+    sightline/.style={black!80, dashed, line width=0.6pt},
+    heading/.style={->, black, line width=0.8pt},
+    rover/.style={draw=black, fill=white, line width=0.8pt},
+    ghost/.style={draw=black!45, fill=white, line width=0.6pt},
+    lbl/.style={inner sep=1pt, fill=white, fill opacity=0.85, text opacity=1},
+  ]
+  \def\heading{110}    % initial rover heading, in degrees
+  \def\aim{18.43}      % direction from the rover to the lookahead point
+
+  % ---- map shared by both panels: occupied cells, grid, A* path, goal ------
+  \newcommand{\lookaheadmap}{%
+    \fill[occupied] (3,0) rectangle (5,2);
+    \fill[occupied] (6,3) rectangle (8,7);
+    \draw[gridline, step=1] (0,0) grid (10,7);
+    \draw[black!70, line width=0.6pt] (0,0) rectangle (10,7);
+    \draw[astar] (1.5,2.5) -- (2.5,3.5) -- (5.5,3.5) -- (6.5,2.5) -- (7.5,2.5)
+                 -- (8.5,3.5) -- (8.5,5.5);
+    \draw[black, line width=0.7pt, fill=white] (8.5,5.5) circle (0.30);
+    \fill[black] (8.5,5.5) circle (0.13);
+    \node[inner sep=1pt, above=2.5pt] at (8.5,5.75) {goal};
+  }
+
+  % ---- step 1: turn toward the lookahead point -----------------------------
+  \begin{scope}
+    \lookaheadmap
+    \draw[sightline] (1.5,2.5) -- (4.5,3.5);
+    \fill[black] (4.5,3.5) circle (0.17);
+    \node[lbl, above=3pt] at (4.5,3.6) {lookahead};
+    \draw[->, black, line width=0.7pt]
+      (1.5,2.5) ++(\heading:1.05) arc[start angle=\heading, end angle={\aim+4}, radius=1.05];
+    \node[lbl] at ($(1.5,2.5)+(68:1.75)$) {$\Delta\theta$};
+    \draw[rover] (1.5,2.5) circle (0.32);
+    \draw[heading] (1.5,2.5) -- ++(\heading:1.5);
+    \node[lbl, below=3pt] at (1.5,2.15) {rover};
+    \node[anchor=north] at (5,-0.25) {Step 1: turn to face the lookahead point};
+  \end{scope}
+
+  % ---- step 2: drive straight to the lookahead point -----------------------
+  \begin{scope}[xshift=7.1cm]
+    \lookaheadmap
+    \draw[ghost] (1.5,2.5) circle (0.32);
+    \draw[->, black!45, line width=0.6pt] (1.5,2.5) -- ++(\aim:0.75);
+    \node[lbl, below=3pt] at (1.5,2.15) {start};
+    \draw[motion] ($(1.5,2.5)+(\aim:0.42)$) -- ($(4.5,3.5)+(\aim:-0.42)$);
+    \draw[rover] (4.5,3.5) circle (0.32);
+    \draw[heading] (4.5,3.5) -- ++(\aim:0.95);
+    \node[lbl, above=3pt] at (4.5,3.82) {rover};
+    \node[anchor=north] at (5,-0.25) {Step 2: drive straight to it};
+  \end{scope}
+\end{tikzpicture}

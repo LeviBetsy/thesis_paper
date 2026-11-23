@@ -5,7 +5,9 @@ This chapter presents the results of testing the Cyclops rover, starting with it
 parts and ending with the full system. Section~\ref{sec:results-latency} reports how fast each
 loop runs and explains why depth is predicted on the laptop rather than on the rover.
 The step-response test of the PI controller described in Section~\ref{sec:PI} was not
-completed and is left as future work. Section~\ref{sec:results-navigation}
+completed and is left as future work. Section~\ref{sec:results-measurement} evaluates the
+measurement model on its own. Section~\ref{sec:results-localization} compares the
+estimated path of the rover with its actual path. Section~\ref{sec:results-navigation}
 tests the full system, in which monocular depth, Monte Carlo localization, and path planning
 must all work together for the rover to reach its goal in the test environment of
 Section~\ref{sec:test-env}. Finally, Section~\ref{sec:results-limitations} discusses the
@@ -34,12 +36,66 @@ device it runs on.
   \end{tabular}
 \end{table}
 
-% \section{Localization Accuracy on the Rover}
-% \label{sec:results-localization}
-%
-% \red{Promised in Section~\ref{sec:navigation}. Report: true path extracted from the overhead
-% tripod camera versus the MCL path (sequence of mean poses), which tests MDE and MCL as one
-% system. Path comparison figure plus a position and heading error summary.}
+\section{Measurement Model}
+\label{sec:results-measurement}
+
+This section reports the results of the measurement model test described in
+Section~\ref{sec:measurement-test}. Figure~\ref{fig:meas-xy} shows the setup and result of the
+sweep over $x$ and $y$. Figure~\ref{fig:meas-xy}(a) shows the noise-free reference scan from the
+true pose $x^{*}$. Figure~\ref{fig:meas-xy}(b) shows the test particles spread across the map in
+$x$ and $y$, all with the same heading as $x^{*}$. Figure~\ref{fig:meas-xy}(c) shows the weight of
+each particle, colored using Equation~\ref{eq:weight-color}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/measurement_model_xy.png}
+  \caption[Measurement model test over position]{Measurement model test over $x$ and $y$.
+    (a) Reference scan from the true pose. (b) Test particles at the true heading, with the true
+    pose in magenta. (c) Particle weights, with blue for a poor match, red for a close match, and
+    a star at the true pose.}
+  \label{fig:meas-xy}
+\end{figure}
+
+Figure~\ref{fig:meas-test} shows the weights from all three sweeps of the measurement test, which
+vary $x$ and $y$, $x$ and $\theta$, and $y$ and $\theta$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/measurement_model_sweeps.png}
+  \caption[Measurement model weights over pose space]{Measurement model weights for the three
+    sweeps, scored against one reference scan from the true pose. Blue marks a poor match, red
+    marks a close match, black marks walls, and the star marks the true pose.}
+  \label{fig:meas-test}
+\end{figure}
+
+
+In all three sweeps, the weights are consistently high in the region near the true pose. The
+sweeps that vary $\theta$ also show a second high-weight region, which is the correct behavior
+because the corners of the square map look identical. In Figure~\ref{fig:meas-test}(b), the red
+region to the left is centered near $x = 0.275$~m and $\theta = 3\pi/4$~rad. A particle at this
+pose has moved to the left and rotated by $90^{\circ}$, so it sees the top-left corner of the map
+exactly as the true pose sees the top-right corner. Likewise, the red region at the top left of
+Figure~\ref{fig:meas-test}(c) is centered near $y = 0.275$~m and $\theta = 7\pi/4$~rad. This
+region depicts a particle in the bottom right of the map looking at the bottom-right corner, which
+gives the same view again.
+
+\section{Localization on the Rover}
+\label{sec:results-localization}
+
+Figure~\ref{fig:ghost-composite} shows the ghost trail of the rover from the test in
+Section~\ref{sec:navigation-test}, with the mean pose path from MCL drawn on top. Localization
+performed well, as the mean pose closely follows the actual path of the rover throughout the
+run. This qualitative result shows that monocular depth and MCL together give the rover a
+reliable estimate of its pose.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[height=9cm,width=0.8\linewidth,keepaspectratio]{figures/ghost_composite1.png}
+  \caption[Ghost trail versus mean pose path]{Ghost trail of the rover from the tripod camera,
+    showing its actual path, with the estimated mean pose path in red and sampled mean poses in
+    yellow.}
+  \label{fig:ghost-composite}
+\end{figure}
 
 \section{Navigation Success Rate}
 \label{sec:results-navigation}

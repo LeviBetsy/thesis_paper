@@ -355,10 +355,6 @@ The occluded points pull the fitted line away from the true relationship between
 inverse depth, severely degrading the accuracy of $a^{*}$ and $b^{*}$. Any ground point that does
 not lie on the floor must therefore be removed before fitting.
 
-% \red{Figure~\ref{fig:occluded-fit} shows an example in which an obstacle lies between the
-% near and far rows of ground points, together with the line fitted when every ground point is kept.}
-% \red{figure}
-
 Let $\hat{d}^{\mathrm{near}}_j$ and
 $\hat{d}^{\mathrm{far}}_j$ denote the relative disparities of the ground points in column $j$ of
 the nearest row and of the row directly behind it, respectively. On a flat floor, the far-row point
@@ -378,11 +374,7 @@ still keeping the two nearest rows of ground points visible on the floor. We set
 $r_{\min} = 14$~cm, the depth of the second row of ground points in
 Figure~\ref{fig:ground-points}. As a consequence, the rover is never driven toward any obstacle
 that lies within $14$~cm of its center. This constraint carries over to the particle filter in
-Chapter~\ref{ch:localization}: a particle whose pose lies within $r_{\min}$ of an obstacle
-describes a pose the rover can never reach, and it is treated as invalid when particles are
-weighted (Section~\ref{sec:weights}).
-If no far-row point survives, the fit is skipped and the
-MDE does not return any depth. 
+Chapter~\ref{ch:localization}.
 
 A drawback of our choice is that $r_{\min}$ is measured inconsistently with how it is used. The
 value of $14$~cm in Figure~\ref{fig:ground-points} is the depth $z$ of the second row along the

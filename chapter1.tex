@@ -84,10 +84,6 @@ predicted from a single image differs from a LiDAR scan in several ways.
   around the robot and out to several meters~\cite{kawata2005urg}. A single forward-facing camera sees only
   what is in front of it, and MDE becomes unreliable at longer distances, so the Cyclops rover
   uses ranges only up to $0.40$~m.
-
-  \item \textbf{Low update rate.} Predicting depth takes far longer than a LiDAR sweep. On the
-  Cyclops rover, a new range scan arrives about three times per second, and only after the camera
-  frame has made a round trip to the laptop.
 \end{itemize}
 
 Each of these differences makes the measurement less informative, and localization relies on the
@@ -147,6 +143,25 @@ that range scan. Chapter~\ref{ch:results} presents the experimental results,
 Chapter~\ref{ch:future-work} lists directions for future work, and Chapter~\ref{ch:conclusion}
 answers the research question.
 
+\section{Terms}
+\label{sec:terms}
+\begin{description}
+  \item[Optical axis] The imaginary straight line that passes through the center of the camera lens
+  and points directly out of the camera, perpendicular to the image plane.
+  \item[Disparity] A value that grows as a point gets closer to the camera, making it inversely
+  related to depth. The term comes from stereo vision, where two side-by-side cameras photograph
+  the same scene and disparity is how many pixels a point shifts between the two images. A nearby
+  point shifts by many pixels, while a distant point barely moves. This means a nearby point has a
+  high disparity, and a distant point has a low disparity.
+  \item[Interrupt] A hardware signal that tells a processor an event needs attention right away.
+  When an interrupt fires, the processor pauses the program it is running, remembers where it
+  stopped, handles the event, and then resumes the program from that same spot. This lets the
+  processor react to events the moment they happen, instead of repeatedly checking whether they
+  have occurred.
+  \item[Interrupt service routine (interrupt handler)] The function that the processor runs in
+  response to an interrupt. The interrupt is the signal that an event happened, and the interrupt
+  service routine is the code that deals with it.
+\end{description}
 
 %%% Local Variables: ***
 %%% mode: latex ***

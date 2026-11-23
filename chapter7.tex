@@ -2,7 +2,8 @@
 \label{ch:future-work}
 
 This chapter lists directions in which the work on the Cyclops rover can be extended, first for
-monocular depth estimation, then for localization, and finally for the embedded system.
+monocular depth estimation, then for localization and the embedded system, and finally for
+testing the full system.
 
 \begin{itemize}
   \item \textbf{Depth Anything V3.} Depth Anything V3~\cite{lin2026depthanything3} was released after the depth
@@ -47,6 +48,11 @@ monocular depth estimation, then for localization, and finally for the embedded 
   $\Delta C[k]$ of each wheel after a step in target speed would measure the stability,
   settling time, and steady-state error of the controller, and would show whether the
   empirically tuned gains $K_P$ and $K_I$ can be improved.
+
+  \item \textbf{More complex scenes and different goals.} Due to time constraints, the navigation
+  trials of Section~\ref{sec:results-navigation} were run with one arrangement of obstacles
+   and one goal. Repeating the trials in more complex scenes and with
+  different goals would show how well localization and navigation hold up beyond this setup.
 \end{itemize}
 %%% Local Variables: ***
 %%% mode: latex ***
