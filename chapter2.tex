@@ -119,7 +119,7 @@ It ran at 12~Hz on a desktop-class computer with a dedicated GPU.
 The predicted depth was consistently off by a scale factor, so they multiplied it by a constant tuned by hand until the predicted obstacle positions matched those measured by the robot's LiDAR.
 The resulting point cloud was added to a costmap, a grid that marks which cells around the robot are blocked, which the ROS~2 navigation stack (Nav2) used to steer around obstacles.
 The robot's pose came from wheel odometry alone, that is, from counting wheel rotations, with no correction from any sensor.
-The robot completed three obstacle courses without a collision in every trial, and its travel distances were comparable to those of a LiDAR baseline.
+The robot completed three obstacle courses without a collision in any trial, and its travel distances were comparable to those of a LiDAR baseline.
 However, the predicted depth placed distant obstacles too close (about 2.2~m for an obstacle at 3~m), so only obstacles within 2~m were used for planning.
 
 This thesis differs from that work in three ways.
@@ -168,7 +168,7 @@ al.~\cite{practical} and with a conventional LiDAR-equipped robot running AMCL.
     \hline
     Pose estimate      & AMCL with LiDAR             & Wheel odometry only           & MCL with camera-derived range scan \\
     \hline
-    Compute            & Onboard computer            & Intel i9 CPU, NVIDIA RTX A4000 GPU (depth at 12~Hz) & Offboard M1 MacBook Pro GPU (depth at about 4~Hz); Raspberry Pi and MSP432 onboard \\
+    Compute            & Onboard computer            & Intel i9 CPU, NVIDIA RTX A4000 GPU (depth at 12~Hz) & Off-board M1 MacBook Pro GPU (depth at about 4~Hz); Raspberry Pi and MSP432 onboard \\
     \hline
     Software stack     & ROS~2 navigation stack      & ROS~2 navigation stack (Nav2) & Custom \\
     \hline

@@ -212,7 +212,9 @@ scheduled~\cite{reghenzani2019rtlinux}. Camera capture, network traffic, and oth
 processes can therefore delay the controller or cause pulses to be missed.
 
 The MSP432 avoids this problem because it runs firmware, a single program executed directly
-on the hardware without an operating system. Its hardware timers trigger the control update
+on the hardware without an operating system. The firmware~\cite{cyclops_msp432_github} builds on
+example code from Valvano's textbook~\cite{valvano} and on device support files from Texas
+Instruments. The MSP432's hardware timers trigger the control update
 at a fixed period, and its PWM hardware drives the motors without CPU involvement
 (Section~\ref{sec:pwm}). Each encoder pulse triggers an interrupt, a hardware signal that
 pauses the main program and immediately runs a short handler routine, so pulses are counted
@@ -308,7 +310,7 @@ between samples. The symbols used to describe the speed loop are defined as foll
     ($T_s = 10$\,ms).
   \item[$\dot{C}^*$] The target wheel speed sent by the Raspberry Pi, in counts per second.
   \item[$\dot{C}^*\,T_s$] The same target speed converted to counts \emph{per sample}. The encoder
-    measures speed in counts for every sample period, so the target must be expressed in the
+    measures speed in counts per sample period, so the target must be expressed in the
     same units before the two can be compared. Multiplying by $T_s$ performs this
     conversion; for example, a target of $\dot{C}^* = 500$ counts per second becomes
     a target speed of $\dot{C}^*\,T_s = 500 \times 0.01 = 5$ counts per sample.

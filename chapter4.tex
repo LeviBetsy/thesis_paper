@@ -26,7 +26,7 @@ any active infrared projection.
 
 
 Our work leverages transformer-based machine learning models to predict 
-depth of each pixel in an RGB image. MDE has advanced rapidly in recent years, and
+the depth of each pixel in an RGB image. MDE has advanced rapidly in recent years, and
 current models now produce increasingly accurate and reliable depth predictions~\cite{DPT,zoedepth,DepthAnythingV2}.
 Monocular depth estimation is particularly attractive for embedded and resource-constrained
 robotic platforms, such as the Cyclops rover, because it removes the need for a
@@ -39,8 +39,8 @@ from visible imagery, its predictions degrade in dark or poorly
 illuminated areas.
 
 
-Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$
-. Let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth map. An entry $z(u,v)$ 
+Let $I \in \mathbb{R}^{H \times W \times 3}$ denote an RGB image of height $H$ and width $W$.
+Let $Z \in \mathbb{R}^{H \times W}$ denote the corresponding metric depth map. An entry $z(u,v)$ 
 is the distance (in meters) along the camera's optical axis of the scene point captured by the image
 at pixel $(u,v)$. \emph{Metric} means each value is in physical units, for example a point
 $20$~cm in front of the camera has a depth of $0.2$~m. Section~\ref{sec:relative-depth} explains
@@ -226,7 +226,7 @@ Several recent models do predict metric depth directly~\cite{DepthAnythingV2,MoG
 work around the ambiguity by learning scale cues from their training data, such as typical object
 sizes and camera viewpoints. The metric variants of DAv2, for example, are fine-tuned on the
 synthetic indoor dataset Hypersim~\cite{hypersim} and on Virtual KITTI 2~\cite{virtualkitti2},
-which uses a car-mounted camera~\cite{DepthAnythingV2}. A camera mounted close to the floor such as one on the Cyclops rover differs from both. In our preliminary trials the metric DAv2 models were
+which uses a car-mounted camera~\cite{DepthAnythingV2}. A camera mounted close to the floor, such as the one on the Cyclops rover, differs from both. In our preliminary trials the metric DAv2 models were
 noticeably less accurate on the Cyclops rover (errors of about $20$~cm, for obstacles $40$~cm away) and added
 roughly $100$~ms of inference latency. We therefore use a relative depth model and recover metric
 scale from the rover's own geometry. A formal comparison is left to future work.
@@ -262,7 +262,7 @@ the camera's mounting geometry (Section~\ref{sec:metric-scale}).
 \subsection{Recovering Metric Scale}
 \label{sec:metric-scale}
 
-To estimate $a$ and $b$ in Equation~\eqref{eq:affine-disparity}, we exploit the mounting
+To estimate $a$ and $b$ in Equation~\ref{eq:affine-disparity}, we exploit the mounting
 geometry of the camera. The Cyclops rover drives on a flat floor, and its camera is rigidly
 mounted to the front of the chassis (Figure~\ref{fig:cyclops-rover}), so the height and tilt of
 the camera relative to the ground never change. Consequently, a pixel that images the floor
@@ -274,9 +274,9 @@ This method of recovering metric scale gives our second constraint on the robot'
 environment: it must operate on a ground plane, and anything above that ground plane is an
 obstacle.
 
-We select $N = 96$ of these pixels, which we call \emph{ground points}. Let
+We select $N_g = 96$ of these pixels, which we call \emph{ground points}. Let
 $(u_k, v_k)$ denote the image location of the $k$-th ground point and $z^{\mathrm{g}}_k$ its known
-metric depth, for $k = 1, \dots, N$.
+metric depth, for $k = 1, \dots, N_g$.
 Figure~\ref{fig:ground-points} shows the checkerboard target used to obtain the ground points.
 The checkerboard is laid flat on the floor in front of the rover, and each of its inner corners
 serves as one ground point; the figure annotates every corner with its depth $z^{\mathrm{g}}_k$ (meters).
@@ -300,26 +300,26 @@ that MDE predicts.
 With the ground points fixed, aligning the depth map becomes a simple linear regression problem: on
 every frame, only the two numbers $a$ and $b$ need to be estimated. Let
 $\hat{d}^{\mathrm{g}}_k = \hat{d}(u_k, v_k)$ be the model's relative disparity at the $k$-th ground
-point, whose true depth $z^{\mathrm{g}}_k$ is known. By Equation~\eqref{eq:affine-disparity}, $a$ and
+point, whose true depth $z^{\mathrm{g}}_k$ is known. By Equation~\ref{eq:affine-disparity}, $a$ and
 $b$ must fit $1/z^{\mathrm{g}}_k \approx a\,\hat{d}^{\mathrm{g}}_k + b$ at every ground point. We
 estimate them with ridge regression~\cite{hoerl1970ridge}, which is ordinary least squares with a small penalty on $a$.
-Equation~\eqref{eq:ridge-fit} depicts this objective, where $\lambda$ is the weight of the penalty.
+Equation~\ref{eq:ridge-fit} depicts this objective, where $\lambda$ is the weight of the penalty.
 \begin{equation}
-  (a^{*}, b^{*}) \;=\; \arg\min_{a,\,b} \;\sum_{k=1}^{N}
+  (a^{*}, b^{*}) \;=\; \arg\min_{a,\,b} \;\sum_{k=1}^{N_g}
     \left( a\,\hat{d}^{\mathrm{g}}_k + b - \frac{1}{z^{\mathrm{g}}_k} \right)^{2} + \lambda\,a^{2}
   \label{eq:ridge-fit}
 \end{equation}
-We set $\lambda = 0.001$, chosen empirically. The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\eqref{eq:affine-disparity} to
+We set $\lambda = 0.001$, chosen empirically. The fitted $a^{*}$ and $b^{*}$ are then substituted into Equation~\ref{eq:affine-disparity} to
 convert the relative disparity $\hat{d}(u,v)$ at every pixel into inverse metric depth $1/\hat{z}(u,v)$.
 
 
-To verify that Equation~\eqref{eq:affine-disparity} holds for the Cyclops rover, we fit all
-$N = 96$ ground points, spanning $16$ rows from nearest to farthest. Figure~\ref{fig:disparity-fit}
+To check whether Equation~\ref{eq:affine-disparity} holds for the Cyclops rover, we fit all
+$N_g = 96$ ground points, spanning $16$ rows from nearest to farthest. Figure~\ref{fig:disparity-fit}
 plots the inverse metric depth $1/z^{\mathrm{g}}_k$ of each ground point against the model's
 relative disparity $\hat{d}^{\mathrm{g}}_k$, together with the fitted line
-$a^{*}\hat{d} + b^{*}$. The points lie close to a single line across all $16$ rows, confirming that the model's output is affine in disparity over the range
+$a^{*}\hat{d} + b^{*}$. The points lie close to a single line across all $16$ rows, which is consistent with the model's output being affine in disparity over the range
 of depths covered by the ground points.
-Because this test verifies the affine relationship only up to the farthest ground point, we
+Because this test checks the affine relationship only up to the farthest ground point, we
 cap the usable range of the recovered depth at $r_{\max} = 40$~cm, close to the depth of that
 farthest point; this cap is applied to the range scan in Section~\ref{sec:range-scan}. This cap
 only narrows the operating scope of the rover for our experiments. It does not mean the model
@@ -332,16 +332,17 @@ relationship, so the fit itself does not require a limit.
   \caption[Affine fit of disparity to inverse metric depth]{Known inverse metric depth
     $1/z^{\mathrm{g}}_k$ versus the relative disparity $\hat{d}^{\mathrm{g}}_k$ predicted by Depth
     Anything V2 for all $96$ ground points in a single frame, colored by row. The line
-    is the fit of Equation~\eqref{eq:ridge-fit}. The near-linear relationship across all $16$ rows
-    confirms the affine model of Equation~\eqref{eq:affine-disparity}.}
+    is the fit of Equation~\ref{eq:ridge-fit}. The near-linear relationship across all $16$ rows
+    is consistent with the affine model of Equation~\ref{eq:affine-disparity}.}
   \label{fig:disparity-fit}
 \end{figure}
 
 
 
 In practice, the rover computes $a^{*}$ and $b^{*}$ from only the two nearest rows of ground
-points. Because Figure~\ref{fig:disparity-fit} shows that all $16$ rows lie on a single line, two
-rows at distinct depths are sufficient to determine its slope and intercept. The nearest rows are
+points, so the sum in Equation~\ref{eq:ridge-fit} runs over those points alone. Because Figure~\ref{fig:disparity-fit} shows that all $16$ rows lie on a single line, two
+rows at distinct depths are sufficient to determine its slope and intercept, although the accuracy of this two-row fit at
+farther points was not evaluated separately. The nearest rows are
 also the least likely to be occluded by obstacles, which leaves the rest of the image free for
 obstacle detection.
 
@@ -359,26 +360,26 @@ Let $\hat{d}^{\mathrm{near}}_j$ and
 $\hat{d}^{\mathrm{far}}_j$ denote the relative disparities of the ground points in column $j$ of
 the nearest row and of the row directly behind it, respectively. On a flat floor, the far-row point
 is farther from the camera than the near-row point and must therefore have a smaller disparity.
-Equation~\eqref{eq:ground-check} depicts the condition a far-row point must satisfy to be kept.
+Equation~\ref{eq:ground-check} depicts the condition a far-row point must satisfy to be kept.
 \begin{equation}
   \hat{d}^{\mathrm{far}}_j \;<\; \hat{d}^{\mathrm{near}}_j
   \label{eq:ground-check}
 \end{equation}
-A far-row point that violates Equation~\eqref{eq:ground-check} is at least as close as the floor in
+A far-row point that violates Equation~\ref{eq:ground-check} is at least as close as the floor in
 front of it. This means it images a surface rising out of the ground plane, so it is discarded as
 an obstacle. The robot is never allowed to drive close
 enough to an obstacle for the obstacle to reach the far row, which reserves a strip of clear floor
 directly in front of the rover for ground calibration. We call the depth of this strip the minimum
 range $r_{\min}$. It is the closest distance at which the rover may approach an obstacle while
 still keeping the two nearest rows of ground points visible on the floor. We set
-$r_{\min} = 14$~cm, the depth of the second row of ground points in
+$r_{\min} = 14$~cm, just beyond the $13$~cm depth of the second row of ground points in
 Figure~\ref{fig:ground-points}. As a consequence, the rover is never driven toward any obstacle
 that lies within $14$~cm of its center. This constraint carries over to the particle filter in
 Chapter~\ref{ch:localization}.
 
 A drawback of our choice is that $r_{\min}$ is measured inconsistently with how it is used. The
-value of $14$~cm in Figure~\ref{fig:ground-points} is the depth $z$ of the second row along the
-camera's optical axis. It is not the radial distance from the center of the rover to that row,
+value of $14$~cm is based on the depth $z$ of the second row in Figure~\ref{fig:ground-points},
+measured along the camera's optical axis. It is not the radial distance from the center of the rover to that row,
 which is the distance the navigation constraint refers to. 
 Expressing $r_{\min}$ as a true
 distance from the rover's center is left to future work.
@@ -408,7 +409,7 @@ a range scan. The Raspberry Pi captures an RGB frame $I$ and sends it to the lap
 tunnel. On the laptop, Depth Anything V2 (Section~\ref{sec:DAV2}) predicts the relative disparity
 $\hat{d}(u,v)$, which is converted to metric depth $\hat{z}(u,v)$ by fitting $a^{*}$ and $b^{*}$ to
 the ground points (Section~\ref{sec:metric-scale}). Every pixel is then back-projected into a 3D
-point cloud with Equation~\eqref{eq:backprojection}, and the points on the ground plane are
+point cloud with Equation~\ref{eq:backprojection}, and the points on the ground plane are
 deleted. The remaining obstacle points are reduced to the 1D range scan
 $R_0, \dots, R_{n-1}$ (Section~\ref{sec:range-scan}), which is sent back over the SSH tunnel to the
 navigation loop on the Raspberry Pi.
@@ -436,9 +437,9 @@ subsections.
 
 The conversion from depth map to 3D points follows the pinhole camera model as described by
 Forsyth and Ponce~\cite{Forsyth_Ponce_CV}, using the intrinsics $f_x$, $f_y$, $c_x$, and $c_y$ calibrated in
-Equation~\eqref{eq:intrinsics}. Consider a scene point
+Equation~\ref{eq:intrinsics}. Consider a scene point
 ${}^{C}\mathbf{p} = [{}^{C}x,\, {}^{C}y,\, {}^{C}z]^\top$ expressed in the camera frame $\{C\}$.
-Its third coordinate ${}^{C}z$ is the point's depth along the optical axis from our MDE pipeline. Equation~\eqref{eq:projection} depicts how this point
+Its third coordinate ${}^{C}z$ is the point's depth along the optical axis from our MDE pipeline. Equation~\ref{eq:projection} depicts how this point
 projects onto the pixel $(u,v)$ at which it appears in the image.
 \begin{equation}
   u = f_x \frac{{}^{C}x}{{}^{C}z} + c_x,
@@ -446,8 +447,8 @@ projects onto the pixel $(u,v)$ at which it appears in the image.
   v = f_y \frac{{}^{C}y}{{}^{C}z} + c_y.
   \label{eq:projection}
 \end{equation}
-Inverting Equation~\eqref{eq:projection} recovers a scene point from its pixel whenever its depth
-is known. Equation~\eqref{eq:backprojection} depicts this back-projection, which recovers the
+Inverting Equation~\ref{eq:projection} recovers a scene point from its pixel whenever its depth
+is known. Equation~\ref{eq:backprojection} depicts this back-projection, which recovers the
 camera-frame point ${}^{C}\mathbf{p}$ imaged at pixel $(u,v)$ from its metric depth
 ${}^{C}z = \hat{z}(u,v)$ as described in Section~\ref{sec:metric-scale}.
 \begin{equation}
@@ -459,12 +460,12 @@ ${}^{C}z = \hat{z}(u,v)$ as described in Section~\ref{sec:metric-scale}.
   \label{eq:backprojection}
 \end{equation}
 
-Applying Equation~\eqref{eq:backprojection} to every pixel of the metric depth map turns it into a
+Applying Equation~\ref{eq:backprojection} to every pixel of the metric depth map turns it into a
 3D point cloud expressed in the camera frame $\{C\}$. Each point is then expressed in the robot
 frame $\{R\}$ using the rigid
-transformation of Equation~\eqref{eq:cam-to-robot}. Equation~\eqref{eq:cloud-to-robot} depicts
+transformation of Equation~\ref{eq:cam-to-robot}. Equation~\ref{eq:cloud-to-robot} depicts
 this change of coordinates applied to each back-projected point, where ${}^{R}_{C}\mathbf{R}$ is
-the camera-to-robot rotation of Equation~\eqref{eq:cam-rotation} and $\mathrm{cam}_t$ is the
+the camera-to-robot rotation of Equation~\ref{eq:cam-rotation} and $\mathrm{cam}_t$ is the
 position of the camera origin $O_C$ in the robot frame.
 \begin{equation}
   {}^{R}\mathbf{p} =
@@ -518,7 +519,7 @@ Chapter~\ref{ch:localization} as the model is designed to tolerate occasional er
     \label{fig:point-cloud-side}
   \end{subfigure}
   \caption[Back-projected point cloud]{A single camera frame (a) and the 3D point cloud obtained by
-    applying Equation~\eqref{eq:backprojection} to every pixel of its metric depth map, shown from
+    applying Equation~\ref{eq:backprojection} to every pixel of its metric depth map, shown from
     three viewpoints: (b) from behind and above the rover, (c) from directly above, and (d) from
     the side. Points are colored by their depth ${}^{C}z$, from red for points close to the camera
     to blue for points farther away.}
@@ -529,7 +530,7 @@ Chapter~\ref{ch:localization} as the model is designed to tolerate occasional er
 
 The back-projected point cloud includes the floor in front of the rover, which is not an obstacle
 and must be removed before the range scan is formed. This is done with a threshold on the robot-frame height ${}^{R}z$ of each
-point (Equation~\eqref{eq:cloud-to-robot}): points less than $2$~cm above the floor are classified as ground plane and discarded. The
+point (Equation~\ref{eq:cloud-to-robot}): points less than $2$~cm above the floor are classified as ground plane and discarded. The
 ceiling is not filtered, since our test area has a high ceiling and the rover's camera is tilted
 downward, placing the ceiling outside the camera's field of view.
 
@@ -537,8 +538,8 @@ downward, placing the ceiling outside the camera's field of view.
 \label{sec:range-scan}
 
 Because the rover moves in the plane of the floor, the height of an obstacle does not matter for
-localization or navigation. Only its position on the floor does. The remaining points are therefore
-transformed into the robot frame and flattened onto the floor plane by discarding their height,
+localization or navigation. Only its position on the floor does. The remaining points, already in the robot frame, are therefore
+flattened onto the floor plane by discarding their height,
 leaving a top-down map of obstacle points as shown in Figure~\ref{fig:range-scan}.
 
 The scan is then formed by dividing the camera's horizontal field of view into $n$ equal angular
@@ -546,7 +547,7 @@ slices ($n = 16$) that fan out from the camera, one slice per ray. Each point fa
 slice according to its bearing from the camera, and ray $k$ reports $R_k$, the distance from the
 camera to the nearest point in its slice. Slices are measured from the camera instead of the robot
 origin so that their boundaries match the camera's true field of view. We cap the range at
-$r_{\max} = 40$~cm, the extent over which the depth alignment was verified against the ground
+$r_{\max} = 40$~cm, the extent over which the depth alignment was checked against the ground
 points, so a ray with no point within $r_{\max}$ reports $r_{\max}$, which marks free space. This
 approach
 results in a 1D range scan $R_0, \dots, R_{n-1}$, the same form of observation a planar LiDAR

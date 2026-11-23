@@ -1,9 +1,10 @@
-\chapter{Result}
+\chapter{Results}
 \label{ch:results}
 
 This chapter presents the results of testing the Cyclops rover, starting with its individual
 parts and ending with the full system. Section~\ref{sec:results-latency} reports how fast each
-loop runs and explains why depth is predicted on the laptop rather than on the rover.
+loop runs. Section~\ref{sec:DAV2} explains why depth is predicted on the laptop rather than on
+the rover.
 The step-response test of the PI controller described in Section~\ref{sec:PI} was not
 completed and is left as future work. Section~\ref{sec:results-measurement} evaluates the
 measurement model on its own. Section~\ref{sec:results-localization} compares the
@@ -30,7 +31,7 @@ device it runs on.
     \hline
     PI controller             & MSP432       & 10\,ms          & 100\,Hz \\
     Encoder count packet      & MSP432       & 100\,ms         & 10\,Hz \\
-    Monocular depth (DAv2-Small) & Laptop    & $\sim$200\,ms   & $\sim$5\,Hz \\
+    Monocular depth (DAv2-Small) & Laptop    & $\sim$250\,ms   & $\sim$4\,Hz \\
     Navigation loop           & Raspberry Pi & $\sim$333\,ms   & $\sim$3\,Hz \\
     \hline
   \end{tabular}
@@ -85,8 +86,8 @@ gives the same view again.
 Figure~\ref{fig:ghost-composite} shows the ghost trail of the rover from the test in
 Section~\ref{sec:navigation-test}, with the mean pose path from MCL drawn on top. Localization
 performed well, as the mean pose closely follows the actual path of the rover throughout the
-run. This qualitative result shows that monocular depth and MCL together give the rover a
-reliable estimate of its pose.
+run. This qualitative result suggests that monocular depth and MCL together gave the rover a
+usable estimate of its pose during this run.
 
 \begin{figure}[htbp]
   \centering
@@ -100,18 +101,17 @@ reliable estimate of its pose.
 \section{Navigation Success Rate}
 \label{sec:results-navigation}
 
-We ran the navigation task of Section~\ref{sec:navigation} for $10$ trials. A trial counts
+We ran the navigation task of Section~\ref{sec:navigation-test} for $10$ trials. A trial counts
 as a success when the rover stops within $5$~cm of the goal, as measured by the tripod
 camera. The rover succeeded in all $10$ of $10$ trials.
 
 \section{Observed Limitations}
 \label{sec:results-limitations}
 
-We found that the minimum range for the particle is a significant drawback of the robot,
-since smaller scene give an almost dense map with barely placeable particles. Thus for
-diverse tests we have to settle with a more spacious scene. We can mitigate this with the 
-abolishing of checkerboard and using pure coordinate transform to get z depth at the closest
-points possible.
+The main limitation we observed is the minimum range $r_{\min}$. In smaller scenes, inflating
+the obstacles by $r_{\min}$ leaves few cells where particles can be placed, so we had to use a
+more spacious test scene. This could be mitigated by removing the checkerboard and computing the
+depth of the closest floor points directly from the camera's mounting geometry.
 
 
 %%% Local Variables: ***

@@ -82,8 +82,8 @@ predicted from a single image differs from a LiDAR scan in several ways.
 
   \item \textbf{Narrow field of view and short range.} A planar LiDAR typically sees most of the way
   around the robot and out to several meters~\cite{kawata2005urg}. A single forward-facing camera sees only
-  what is in front of it, and MDE becomes unreliable at longer distances, so the Cyclops rover
-  uses ranges only up to $0.40$~m.
+  what is in front of it, and the depth calibration of the Cyclops rover was checked only at
+  short range, so the rover uses ranges only up to $0.40$~m.
 \end{itemize}
 
 Each of these differences makes the measurement less informative, and localization relies on the

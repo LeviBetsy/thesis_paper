@@ -76,9 +76,10 @@ white cells are free (value 0).
 \section{Monte Carlo Localization}
 \label{sec:mcl}
 
-Monte Carlo localization (MCL) is a particle filter approach to localization that has
-become one of the most popular localization algorithms in robotics~\cite{thrun2005probabilistic}.
-It is easy to implement and works well across a wide range of localization problems. The
+Monte Carlo localization (MCL) is a particle filter approach to localization. Thrun et al.\ write
+that MCL ``has quickly become one of the most popular localization algorithms in robotics. It is
+easy to implement, and tends to work well across a broad range of localization
+problems''~\cite{thrun2005probabilistic}\red{[page]}. The
 goal of localization is to estimate the rover's pose $x_t = (x, y, \theta)^\top$ in a known
 map $m$, given every control $u_{1:t}$ and measurement $z_{1:t}$ received up to time $t$.
 Equation~\ref{eq:belief}, adopted from~\cite{thrun2005probabilistic}, defines this
@@ -89,7 +90,7 @@ there, and the belief is this function taken over every pose in the map.
 Here, the control $u_t$ is the odometry increment computed from the wheel encoder counts
 explained in Section~\ref{sec:motion-model}. It is not the PI controller output $u[k]$ from
 Section~\ref{sec:PI}, which is a PWM duty value. The measurement $z_t$ is the range scan
-recovered from monocular depth from Section~\ref{sec:measurement-model}. It is not the per-pixel
+recovered from monocular depth, as described in Section~\ref{sec:measurement-model}. It is not the per-pixel
 depth $z(u,v)$ of Chapter~\ref{ch:mde}, although the scan is derived from it.
 
 \begin{equation}
@@ -114,7 +115,7 @@ distributions over the pose. Second, the cost of MCL grows linearly with the num
 particles $M$, so it can be tuned to fit the computational budget of the rover.
 
 Algorithm~\ref{alg:mcl} lists the MCL procedure, adapted from~\cite{thrun2005probabilistic}.
-The MCL algorithm is based on the Particle Filter algorithm~\cite{thrun2005probabilistic}.
+The MCL algorithm is based on the particle filter algorithm~\cite{thrun2005probabilistic}.
 Each call to Algorithm~\ref{alg:mcl} updates the belief from time $t-1$ to time $t$. The
 inputs are the previous particle set $\mathcal{X}_{t-1}$, the latest control $u_t$, the
 latest measurement $z_t$, and the map $m$. 
@@ -185,7 +186,7 @@ map of the test scene.
   \includegraphics[height=7cm,width=\linewidth,keepaspectratio]{"figures/scene1map inflated"}
   \caption[Inflated map of the test scene]{The map of the test scene from
     Figure~\ref{fig:scene-map} with every obstacle inflated by $r_{\min} = 14$~cm. Black cells
-    are occupied, and grey cells are unplaceable free cells.}
+    are occupied, and gray cells are unplaceable free cells.}
   \label{fig:inflated-map}
 \end{figure}
 
@@ -201,8 +202,9 @@ The Cyclops rover uses the odometry motion model from~\cite{thrun2005probabilist
 model takes as input an odometry increment $(\Delta x, \Delta y, \Delta\theta)$ that
 describes how the rover moved since the previous MCL update, expressed in the rover's frame
 at the start of that interval: $\Delta x$ is the travel along the starting heading,
-$\Delta y$ is the travel to the left of it, and $\Delta\theta$ is the change in heading. The
-encoders do not provide this increment directly. Section~\ref{sec:wheel-odometry} describes
+$\Delta y$ is the travel to the left of it, and $\Delta\theta$ is the change in heading. This
+planar convention, with $x$ along the heading, differs from the robot frame $\{R\}$ of
+Chapter~\ref{ch:embedded}, where $y$ points forward. The encoders do not provide this increment directly. Section~\ref{sec:wheel-odometry} describes
 how it is computed on the Raspberry Pi from the encoder counts, and
 Section~\ref{sec:odom-sampling} describes how it is used to move the particles.
 
@@ -259,8 +261,8 @@ with $\phi_0 = 0$.
   \qquad
   \Delta\theta = \phi_J
 \end{equation}
-Each arc points in the direction the rover is facing at that moment, $\phi_{j-1}$, which
-accounts for all the turning from the previous packets since the last MCL update.
+Each arc points in the rover's average heading over that packet, $\phi_{j-1} + \delta\theta_j/2$,
+which accounts for all the turning since the last MCL update.
 
 When MCL performs an update, it reads the accumulated increment and resets it to zero. 
 This ensures that every arc is applied to the particles exactly once,
@@ -300,8 +302,8 @@ Table~\ref{tab:motion-params}.
     \sigma_{\mathrm{rot2}}  &= \alpha_1 |\delta_{\mathrm{rot2}}| + \alpha_2 |\delta_{\mathrm{trans}}|
   \end{aligned}
 \end{equation}
-The absolute values keep each $\sigma$ positive for right turns and for reverse motion,
-both of which give negative values of $\delta$.
+The absolute values keep each $\sigma$ positive for right turns, which give negative values of
+$\delta_{\mathrm{rot1}}$ and $\delta_{\mathrm{rot2}}$.
 
 For every particle $k$, a noisy version of each motion is drawn independently.
 Equation~\ref{eq:motion-sample} shows this draw, where each noise term $\varepsilon$ is
@@ -365,7 +367,7 @@ Algorithm~\ref{alg:mcl}. It answers one question: if the rover were at pose $x_t
 the map $m$, how likely is the range scan it actually received? The measurement $z_t$ is the
 range scan produced by the MDE pipeline (Section~\ref{sec:mde-to-range}), which holds one
 range per ray. Equation~\ref{eq:scan} depicts the scan, where $z_t^i = R_i$ is the range
-reported by ray $i$ from our MDE pipieline described in Section~\ref{sec:range-scan} and $n$ is the number of rays ($n = 16$).
+reported by ray $i$ from our MDE pipeline described in Section~\ref{sec:range-scan} and $n$ is the number of rays ($n = 16$).
 \begin{equation}
   \label{eq:scan}
   z_t = \left( z_t^0, z_t^1, \dots, z_t^{n-1} \right)
@@ -453,7 +455,7 @@ score that is high when a particle's ray agrees with the scan, falls off smoothl
 drift apart, and never collapses to zero because of a single bad ray.
 
 This likelihood is built one ray at a time. Every particle casts its own ray $i$ through the map
-as described in Section~\ref{sec:ray-casting}, and a distribution is centered on the resulting expected ray
+as described in Section~\ref{sec:ray-casting}, and a distribution is centered on the resulting expected range
 $z_t^{i*}$. The range $z_t^i$ measured by ray $i$ of the 1D angular range scan produced by the MDE
 pipeline from Section~\ref{sec:range-scan} is then evaluated in that distribution. A particle whose
 expected range lies near the measured range receives a high likelihood
@@ -533,10 +535,10 @@ To check the measurement model on its own, we test it without the motion model, 
 MDE. The test asks whether the weight of a particle is highest at the true pose and how quickly
 it falls as the particle moves away from that pose.
 
-The test uses an empty map of 1.00~m $\times$ 1.00~m square, with four walls and no obstacles.
-no obstacles. One pose is chosen as the true pose $x^{*} = (0.725~\text{m}, 0.725~\text{m}, \pi/4~\text{rad})$,
-snapped to the center of its grid cell. This pose faces a corner of the enclosure. Because
-$r_{\max}$ is only 40~cm, a pose in the middle of the enclosure would see no walls, and all of its
+The test uses an empty 1.00~m $\times$ 1.00~m square map, with four walls and no obstacles.
+One pose is chosen as the true pose $x^{*} = (0.725~\text{m}, 0.725~\text{m}, \pi/4~\text{rad})$,
+snapped to the center of its grid cell. This pose faces a corner of the map. Because
+$r_{\max}$ is only 40~cm, a pose in the middle of the map would see no walls, and all of its
 rays would report $r_{\max}$. The reference scan $z^{*}$ is produced by casting $n$ rays from
 $x^{*}$ as described in Section~\ref{sec:ray-casting}. Since this scan contains no sensor noise,
 any spread in the weights comes from the measurement model and the geometry of the map rather than
@@ -589,8 +591,8 @@ that node is the goal, the search ends. Otherwise, its neighbors are added to th
 updated if a shorter path to them has been found. Ordering the search by $f$ directs it toward
 the goal instead of expanding equally in all directions.
 
-A* searches over the free cells of the grid, where each cell connects to its eight
-neighbors. A free cell is one that is not an unplaceable cell as defined in Section~\ref{sec:mcl}. A straight move costs
+A* searches over the traversable cells of the grid, where each cell connects to its eight
+neighbors. A traversable cell is one that is neither occupied nor unplaceable (Section~\ref{sec:mcl}). A straight move costs
 one cell and a diagonal move costs $\sqrt{2}$ cells. Equation~\ref{eq:astar-f} depicts the
 priority $f$ of a cell, where $g$ is the cost of the best path found so far from the start to
 that cell and $h$ is a heuristic estimate of the remaining cost to the goal.
@@ -611,7 +613,7 @@ at a cost of $\sqrt{2}$ each, which aligns the cell with the goal along one axis
 the remaining $\max(\Delta r, \Delta c) - \min(\Delta r, \Delta c)$ straight moves at a cost of
 one each. Since walls can only lengthen the path, $h$ never overestimates
 the remaining cost, which guarantees that A* returns a shortest path. If the mean pose falls
-inside a wall buffer, the search starts from the nearest free cell.
+inside an unplaceable cell, the search starts from the nearest free cell.
 
 \subsection{Lookahead Path Following}
 \label{sec:path-following}
@@ -667,7 +669,7 @@ once the mean pose is within a tolerance of the goal, or when no path to the goa
 \subsection{Localization and Navigation Test}
 \label{sec:navigation-test}
 
-The rover starts at a known pose $x_{\mathrm{start}} = $ $(0.395, 0.55, \pi/2)$ (m, m, rad), 
+The rover starts at a known pose $x_{\mathrm{start}} = (0.395, 0.55, \pi/2)$ (m, m, rad),
 and MCL runs with
 $M = 500$ particles. Since the start pose is known, the particles are initialized around it
 rather than spread across the map. Each particle is sampled from a Gaussian centered on
@@ -683,7 +685,7 @@ number of particles, and these standard deviations.
     \hline
     Parameter & Description & Units & Value \\
     \hline
-    $x_{\mathrm{start}}$ & Known start pose $(x, y, \theta)$ & (m, m, rad) & $(0.395, 0.22, \pi/2)$ \\
+    $x_{\mathrm{start}}$ & Known start pose $(x, y, \theta)$ & (m, m, rad) & $(0.395, 0.55, \pi/2)$ \\
     $M$                  & Number of particles               & --          & 500 \\
     $\sigma_x$           & Initial standard deviation in $x$ & m           & 0.05 \\
     $\sigma_y$           & Initial standard deviation in $y$ & m           & 0.05 \\
@@ -692,7 +694,7 @@ number of particles, and these standard deviations.
   \end{tabular}
 \end{table}
 
-From the start pose, the rover drives to the goal $(x_g, y_g) = $ $(0.307, 1.507)$ on the map.
+From the start pose, the rover drives to the goal $(x_g, y_g) = (0.307, 1.507)$~m on the map.
 Figure~\ref{fig:nav-start-goal} shows the goal, the initial particles around the known start
 pose, and the mean pose, which is where the rover estimates it is.
 \begin{figure}[htbp]
